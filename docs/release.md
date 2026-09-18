@@ -58,6 +58,8 @@ src-tauri/target/release/
 
 具体文件名以构建日志为准；`productName` / `mainBinaryName` 均为 `TaskTick`（安装包与开始菜单名用英文，避免 WiX MSI 对非 ASCII 的限制；窗口标题等 UI 仍可为「时序 · TaskTick」），`identifier` 为 `com.moon.tasktick`。
 
+NSIS（`-setup.exe`）已配置 `SimpChinese` + `English`，并开启语言选择器（`displayLanguageSelector`）。未配置时默认仅英文。
+
 数据目录（运行时，非安装目录）：
 
 ```text
