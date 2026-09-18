@@ -56,7 +56,7 @@ src-tauri/target/release/
 └── TaskTick.exe  # 未打包的可执行文件（调试/便携试跑；由 mainBinaryName 指定）
 ```
 
-具体文件名以构建日志为准；`productName` 为 `时序 · TaskTick`，`mainBinaryName` 为 `TaskTick`，`identifier` 为 `com.moon.tasktick`。
+具体文件名以构建日志为准；`productName` / `mainBinaryName` 均为 `TaskTick`（安装包与开始菜单名用英文，避免 WiX MSI 对非 ASCII 的限制；窗口标题等 UI 仍可为「时序 · TaskTick」），`identifier` 为 `com.moon.tasktick`。
 
 数据目录（运行时，非安装目录）：
 
