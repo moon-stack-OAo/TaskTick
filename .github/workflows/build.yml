@@ -1,0 +1,104 @@
+# 预览编包：仅手动触发。产物上传为 Actions artifact，不发 GitHub Release。
+# 与 release.yml 正交：发版时会独立再构建，不消费本 workflow 的 artifact。
+name: Build preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_agent:
+        description: 是否一并构建并打包 wecom-agent
+        type: boolean
+        default: true
+
+concurrency:
+  group: build-preview
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows bundle
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Setup .NET
+        if: ${{ inputs.include_agent }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Build wecom-agent
+        if: ${{ inputs.include_agent }}
+        working-directory: tools/wecom-agent
+        run: |
+          dotnet restore
+          dotnet build -c Release --no-restore
+
+      - name: Stage wecom-agent
+        if: ${{ inputs.include_agent }}
+        shell: pwsh
+        run: |
+          $srcDir = "tools/wecom-agent/bin/Release/net10.0-windows"
+          $exe = Join-Path $srcDir "wecom-agent.exe"
+          if (-not (Test-Path $exe)) { throw "wecom-agent.exe 未生成: $exe" }
+          New-Item -ItemType Directory -Force -Path "dist-agent" | Out-Null
+          Copy-Item "$srcDir\*" "dist-agent\" -Force
+
+      - name: Tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            Write-Error "缺少 Secret TAURI_SIGNING_PRIVATE_KEY。createUpdaterArtifacts 已开启，预览构建也需要签名私钥。"
+            exit 1
+          }
+          npm run tauri build
+        shell: pwsh
+
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          $out = "preview-artifacts"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $bundle = "src-tauri/target/release/bundle"
+          if (Test-Path $bundle) {
+            Get-ChildItem $bundle -Recurse -File | ForEach-Object {
+              $rel = $_.FullName.Substring((Resolve-Path $bundle).Path.Length).TrimStart('\','/')
+              $dest = Join-Path $out ($rel -replace '[\\/]', '-')
+              Copy-Item $_.FullName $dest -Force
+            }
+          }
+          $exe = "src-tauri/target/release/TaskTick.exe"
+          if (Test-Path $exe) { Copy-Item $exe (Join-Path $out "TaskTick.exe") -Force }
+          if (Test-Path "dist-agent") {
+            Compress-Archive -Path "dist-agent\*" -DestinationPath (Join-Path $out "wecom-agent-windows-x64.zip") -Force
+          }
+          Get-ChildItem $out | Format-Table Name, Length
+
+      - name: Upload preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TaskTick-windows-preview-${{ github.sha }}
+          path: preview-artifacts/
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,42 @@
+{
+  "name": "tasktick",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "typecheck": "tsc --noEmit",
+    "check:rust": "cargo check --manifest-path src-tauri/Cargo.toml",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "check": "npm run typecheck && npm run check:rust && npm run test",
+    "clear": "rimraf dist dist-ssr dist-agent preview-artifacts release-notes.md src-tauri/target src-tauri/gen/schemas",
+    "clean": "npm run clear",
+    "agent:restore": "dotnet restore --project tools/wecom-agent",
+    "agent:build": "dotnet build -c Release --project tools/wecom-agent"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-autostart": "^2.5.1",
+    "@tauri-apps/plugin-dialog": "^2.7.3",
+    "@tauri-apps/plugin-notification": "^2.4.0",
+    "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.11.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^6.0.2",
+    "rimraf": "^6.1.3",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.16"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window。single-instance 无 JS API，桌面端无需额外 permission；关窗进托盘依赖下方 window show/hide/focus。",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "opener:allow-open-path",
+    "dialog:default",
+    "autostart:default",
+    "notification:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-unminimize",
+    "core:window:allow-close",
+    "core:tray:default",
+    "updater:default",
+    "process:default"
+  ]
+}

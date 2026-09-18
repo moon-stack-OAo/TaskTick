@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="时序 · TaskTick 托盘">
+    <defs>
+        <linearGradient id="tplate" x1="20%" y1="10%" x2="80%" y2="90%">
+            <stop offset="0%" stop-color="#1E56A8"/>
+            <stop offset="100%" stop-color="#1A3F8A"/>
+        </linearGradient>
+    </defs>
+    <!-- 托盘采用更粗的轮廓和更小的边距 -->
+    <rect x="1" y="1" width="30" height="30" rx="7" fill="url(#tplate)"/>
+    <g transform="translate(16 16)" fill="none" stroke="#F0F7FF" stroke-width="2.6" stroke-linecap="round"
+       stroke-linejoin="round">
+        <path d="M 5.2 -5.2 A 7.4 7.4 0 1 1 -5.2 5.2"/>
+    </g>
+    <path d="M 18.2 7.2 L 24.2 13.2 L 16.6 13.6 Z" fill="#F0F7FF"/>
+    <path d="M 13.2 11.4 L 13.2 20.6 L 21.2 16 Z" fill="#7DD3FC"/>
+</svg>

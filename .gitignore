@@ -10,6 +10,9 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-agent
+preview-artifacts
+release-notes.md
 *.local
 
 # Editor directories and files
@@ -22,3 +25,18 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Rust / Tauri
+src-tauri/target
+src-tauri/gen/schemas
+
+# .NET / wecom-agent
+tools/wecom-agent/bin
+tools/wecom-agent/obj
+*.user
+wecom-agent-windows-x64.zip
+
+# OS
+Thumbs.db
+Desktop.ini
+

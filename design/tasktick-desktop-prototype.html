@@ -1,0 +1,3417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auto Task — 桌面定时任务</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: oklch(98.2% 0.004 250);
+      --surface: oklch(100% 0 0);
+      --fg: oklch(22% 0.02 240);
+      --muted: oklch(48% 0.016 240);
+      --border: oklch(91% 0.007 240);
+      --border-soft: oklch(94% 0.006 240);
+      --accent: oklch(55% 0.17 250);
+      --accent-fg: oklch(99% 0 0);
+      --success: oklch(48% 0.14 145);
+      --success-bg: oklch(96% 0.035 145);
+      --danger: oklch(52% 0.18 25);
+      --danger-bg: oklch(96.5% 0.03 25);
+      --warn: oklch(58% 0.13 75);
+      --warn-bg: oklch(97.5% 0.035 85);
+      --sidebar: oklch(97.5% 0.005 250);
+      --titlebar: oklch(97% 0.005 250);
+      --shadow: 0 1px 2px oklch(22% 0.02 240 / 0.04), 0 6px 18px oklch(22% 0.02 240 / 0.05);
+      --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      --radius: 10px;
+      --focus: 0 0 0 2px var(--surface), 0 0 0 4px oklch(55% 0.17 250 / 0.45);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: var(--font-body);
+      color: var(--fg);
+      background:
+        radial-gradient(1200px 600px at 10% -10%, oklch(94% 0.03 250), transparent 60%),
+        radial-gradient(900px 500px at 100% 0%, oklch(95% 0.02 230), transparent 55%),
+        oklch(92% 0.01 250);
+    }
+
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    :focus-visible { outline: none; box-shadow: var(--focus); }
+
+    .stage {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 28px 20px 40px;
+      gap: 18px;
+    }
+
+    .app-window {
+      width: min(1180px, 100%);
+      height: min(760px, calc(100vh - 80px));
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow), 0 20px 48px oklch(22% 0.02 240 / 0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .titlebar {
+      height: 40px;
+      background: var(--titlebar);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px 0 14px;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .titlebar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .app-mark {
+      width: 18px;
+      height: 18px;
+      border-radius: 5px;
+      background: linear-gradient(145deg, oklch(62% 0.17 250), var(--accent));
+      display: grid;
+      place-items: center;
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .titlebar-title {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .titlebar-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-left: 4px;
+    }
+    .window-controls { display: flex; gap: 2px; }
+    .win-btn {
+      width: 36px;
+      height: 28px;
+      border: 0;
+      background: transparent;
+      border-radius: 6px;
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+    }
+    .win-btn:hover { background: oklch(90% 0.01 240); color: var(--fg); }
+    .win-btn.close:hover { background: oklch(55% 0.2 25); color: white; }
+
+    .shell {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      min-height: 0;
+    }
+
+    .sidebar {
+      background: var(--sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 12px 10px;
+      gap: 4px;
+      min-height: 0;
+    }
+    .nav-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 4px 10px 8px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      border-radius: 8px;
+      padding: 9px 10px;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--fg);
+      text-align: left;
+    }
+    .nav-item:hover { background: oklch(94% 0.01 250); }
+    .nav-item.active {
+      background: oklch(93% 0.035 250);
+      color: oklch(40% 0.14 250);
+    }
+    .nav-item .icon {
+      width: 18px;
+      height: 18px;
+      display: grid;
+      place-items: center;
+      opacity: 0.85;
+    }
+    .nav-item .badge {
+      margin-left: auto;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      background: oklch(92% 0.01 240);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 1px 7px;
+      min-width: 22px;
+      text-align: center;
+    }
+    .nav-item.active .badge {
+      background: oklch(88% 0.05 250);
+      color: oklch(40% 0.14 250);
+    }
+    .sidebar-foot {
+      margin-top: auto;
+      padding: 10px 8px 4px;
+      border-top: 1px solid var(--border);
+    }
+    .status-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      padding: 8px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 0 3px oklch(52% 0.14 145 / 0.18);
+      flex-shrink: 0;
+    }
+
+    .main {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      background: var(--bg);
+    }
+    .topbar {
+      height: 56px;
+      padding: 0 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-left {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .topbar-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+    }
+    .topbar-desc {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 420px;
+    }
+    .topbar-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .page-header {
+      padding: 18px 22px 12px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    .page-header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+    }
+    .page-desc {
+      margin: 4px 0 0;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .header-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+
+    .btn {
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      font-size: 13px;
+      font-weight: 550;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: var(--accent-fg);
+      border-color: oklch(48% 0.17 250);
+    }
+    .btn-primary:hover { background: oklch(48% 0.17 250); color: var(--accent-fg); }
+    .btn-secondary {
+      background: var(--surface);
+      border-color: var(--border);
+      color: var(--fg);
+    }
+    .btn-secondary:hover { background: oklch(96% 0.008 250); }
+    .btn-ghost {
+      background: transparent;
+      border-color: transparent;
+      color: var(--fg);
+    }
+    .btn-ghost:hover { background: oklch(94% 0.01 250); }
+    .btn-danger-ghost {
+      background: transparent;
+      border-color: transparent;
+      color: var(--danger);
+    }
+    .btn-danger-ghost:hover { background: var(--danger-bg); }
+    .btn-sm { height: 30px; padding: 0 10px; font-size: 12.5px; }
+    .btn-icon {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border-radius: 7px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      display: inline-grid;
+      place-items: center;
+    }
+    .btn-icon:hover { background: oklch(94% 0.01 250); color: var(--fg); }
+
+    .content {
+      flex: 1;
+      overflow: auto;
+      padding: 14px 18px 18px;
+      min-height: 0;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .subbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .search {
+      flex: 1;
+      min-width: 180px;
+      max-width: 320px;
+      height: 34px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 0 12px 0 34px;
+      position: relative;
+      font-size: 13px;
+    }
+    .search-wrap { position: relative; flex: 1; min-width: 180px; max-width: 320px; }
+    .search-wrap svg {
+      position: absolute;
+      left: 11px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      pointer-events: none;
+    }
+    .search:hover { border-color: oklch(84% 0.015 240); }
+    .search:focus { border-color: oklch(70% 0.1 250); box-shadow: var(--focus); outline: none; }
+
+    .filter-group {
+      display: inline-flex;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .filter-chip {
+      height: 28px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      font-size: 12.5px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .filter-chip:hover { color: var(--fg); background: oklch(96% 0.008 250); }
+    .filter-chip.active {
+      background: oklch(93% 0.035 250);
+      color: oklch(40% 0.14 250);
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 2px oklch(22% 0.02 240 / 0.03);
+    }
+
+    .task-table { width: 100%; border-collapse: collapse; }
+    .task-table th {
+      text-align: left;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: oklch(99.2% 0.002 250);
+      white-space: nowrap;
+    }
+    .task-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-soft);
+      vertical-align: middle;
+      font-size: 13.5px;
+    }
+    .task-table tr:last-child td { border-bottom: 0; }
+    .task-table tbody tr:hover td { background: oklch(98.6% 0.006 250); }
+
+    .task-name {
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .task-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 3px;
+      line-height: 1.4;
+    }
+    .mono { font-family: var(--font-mono); font-size: 12px; }
+    .muted { color: var(--muted); }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 600;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .pill-ok {
+      background: var(--success-bg);
+      color: var(--success);
+      border-color: oklch(88% 0.05 145);
+    }
+    .pill-fail {
+      background: var(--danger-bg);
+      color: var(--danger);
+      border-color: oklch(90% 0.04 25);
+    }
+    .pill-off {
+      background: oklch(96% 0.008 240);
+      color: oklch(45% 0.015 240);
+      border-color: oklch(90% 0.01 240);
+    }
+    .pill-on {
+      background: oklch(94% 0.03 250);
+      color: oklch(40% 0.14 250);
+      border-color: oklch(88% 0.05 250);
+    }
+    .pill-info { background: oklch(95% 0.025 250); color: oklch(42% 0.14 250); border-color: oklch(90% 0.04 250); }
+    .pill-warn { background: var(--warn-bg); color: oklch(48% 0.12 75); border-color: oklch(90% 0.05 85); }
+    .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: 0.9;
+    }
+
+    .switch {
+      width: 36px;
+      height: 20px;
+      border-radius: 999px;
+      border: 0;
+      background: oklch(84% 0.015 240);
+      position: relative;
+      transition: background 0.15s ease;
+      padding: 0;
+      flex-shrink: 0;
+    }
+    .switch.on { background: var(--accent); }
+    .switch::after {
+      content: "";
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: white;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.15s ease;
+      box-shadow: 0 1px 2px oklch(22% 0.02 240 / 0.25);
+    }
+    .switch.on::after { transform: translateX(16px); }
+
+    .row-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      justify-content: flex-end;
+      flex-shrink: 0;
+    }
+    .row-actions .btn-sm { min-width: 64px; }
+
+    .task-list {
+      display: flex;
+      flex-direction: column;
+    }
+    .task-row {
+      display: grid;
+      grid-template-columns: 48px minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-soft);
+      background: var(--surface);
+      transition: background 0.12s ease;
+    }
+    .task-row:last-child { border-bottom: 0; }
+    .task-row:hover { background: oklch(98.6% 0.006 250); }
+    .task-row-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .task-row-main {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .task-row-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+    .task-row-title .name {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--fg);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+    }
+    .task-row-summary {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .task-row-summary .sep {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: oklch(78% 0.01 240);
+      flex-shrink: 0;
+    }
+    .task-row-summary .sum-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 420px;
+    }
+    .task-row-aside {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+      justify-self: end;
+    }
+    .task-row-last {
+      min-width: 118px;
+      text-align: right;
+    }
+    .task-row-last .task-meta {
+      margin-top: 4px;
+    }
+
+    .menu {
+      position: absolute;
+      z-index: 40;
+      min-width: 168px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      padding: 4px;
+    }
+    .menu button {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      text-align: left;
+      padding: 8px 10px;
+      border-radius: 7px;
+      font-size: 13px;
+      color: var(--fg);
+    }
+    .menu button:hover { background: oklch(96% 0.008 250); }
+    .menu button.danger { color: var(--danger); }
+    .menu button.danger:hover { background: var(--danger-bg); }
+    .menu-sep {
+      height: 1px;
+      background: var(--border);
+      margin: 4px 6px;
+    }
+
+    .empty {
+      padding: 52px 24px;
+      text-align: center;
+      color: var(--muted);
+    }
+    .empty-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 12px;
+      border-radius: 12px;
+      background: oklch(96% 0.02 250);
+      color: var(--accent);
+      display: grid;
+      place-items: center;
+    }
+    .empty h3 {
+      margin: 0 0 6px;
+      color: var(--fg);
+      font-size: 15px;
+    }
+    .empty p { margin: 0; font-size: 13px; line-height: 1.5; max-width: 360px; margin-inline: auto; }
+
+    .toast {
+      position: absolute;
+      right: 18px;
+      bottom: 18px;
+      z-index: 60;
+      background: var(--fg);
+      color: oklch(98% 0.005 250);
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 360px;
+      animation: toast-in 0.18s ease;
+    }
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Form / editor */
+    .form-grid {
+      display: grid;
+      gap: 16px;
+      max-width: 760px;
+    }
+    .field label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .field .hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 5px;
+      line-height: 1.4;
+    }
+    .input, .select, .textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 0 12px;
+      height: 36px;
+      font-size: 13.5px;
+    }
+    .textarea {
+      height: auto;
+      min-height: 72px;
+      padding: 10px 12px;
+      resize: vertical;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.45;
+    }
+    .input:hover, .select:hover, .textarea:hover { border-color: oklch(84% 0.015 240); }
+    .input:focus, .select:focus, .textarea:focus {
+      border-color: oklch(70% 0.1 250);
+      box-shadow: var(--focus);
+      outline: none;
+    }
+    .seg {
+      display: inline-flex;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 2px;
+      flex-wrap: wrap;
+    }
+    .seg button {
+      height: 30px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+    .seg button:hover { color: var(--fg); background: oklch(96% 0.008 250); }
+    .seg button.active {
+      background: oklch(93% 0.035 250);
+      color: oklch(40% 0.14 250);
+    }
+    .row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .action-block {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+    .action-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .action-title {
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .form-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+      margin-top: 8px;
+    }
+
+    /* Logs */
+    .log-row { cursor: pointer; }
+    .log-detail {
+      background: oklch(98.5% 0.004 250);
+      border-top: 1px dashed var(--border);
+      padding: 14px 16px 16px 42px;
+      color: oklch(35% 0.02 240);
+      line-height: 1.55;
+    }
+    .log-detail-raw {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      white-space: pre-wrap;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border-soft);
+      color: oklch(40% 0.02 240);
+    }
+    .timeline {
+      display: grid;
+      gap: 0;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .timeline-item {
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      gap: 10px;
+      position: relative;
+      padding-bottom: 12px;
+    }
+    .timeline-item:last-child { padding-bottom: 0; }
+    .timeline-item:not(:last-child)::before {
+      content: "";
+      position: absolute;
+      left: 8px;
+      top: 16px;
+      bottom: 0;
+      width: 1px;
+      background: var(--border);
+    }
+    .tl-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: var(--surface);
+      margin-top: 2px;
+      box-sizing: border-box;
+    }
+    .tl-dot.ok { border-color: var(--success); background: var(--success-bg); }
+    .tl-dot.fail { border-color: var(--danger); background: var(--danger-bg); }
+    .tl-dot.skip { border-color: oklch(82% 0.01 240); background: oklch(96% 0.005 240); }
+    .tl-body { min-width: 0; }
+    .tl-title {
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .tl-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+      font-family: var(--font-mono);
+    }
+
+    /* WeCom form steps */
+    .step-stack { display: grid; gap: 12px; }
+    .step-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: oklch(99.2% 0.002 250);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .step-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      font-weight: 650;
+    }
+    .step-num {
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      background: oklch(93% 0.035 250);
+      color: oklch(40% 0.14 250);
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .step-hint {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+      margin: 0;
+    }
+    .precheck-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .fallback-box {
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      background: var(--surface);
+    }
+    .fallback-title {
+      font-size: 12.5px;
+      font-weight: 650;
+      margin: 0;
+    }
+
+    /* Settings */
+    .settings-wrap { display: grid; gap: 14px; max-width: 720px; }
+    .settings-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px;
+      padding: 2px;
+      border-bottom: 1px solid var(--border);
+      margin: 0 0 2px;
+    }
+    .settings-tab {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 550;
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 8px 8px 0 0;
+      cursor: pointer;
+      position: relative;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+    .settings-tab:hover { background: oklch(96% 0.008 250); color: var(--fg); }
+    .settings-tab.active {
+      color: var(--accent);
+      background: oklch(96% 0.02 250);
+      font-weight: 650;
+    }
+    .settings-tab.active::after {
+      content: "";
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: -3px;
+      height: 2px;
+      border-radius: 2px;
+      background: var(--accent);
+    }
+    .settings-stack { display: grid; gap: 14px; }
+    .setting-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 16px;
+    }
+    .setting-row + .setting-row { border-top: 1px solid var(--border); }
+    .setting-title { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+    .setting-desc { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+    .setting-inline-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .setting-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+    .setting-select {
+      height: 32px;
+      min-width: 160px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--fg);
+      font: inherit;
+      font-size: 13px;
+      padding: 0 10px;
+    }
+    .setting-number {
+      width: 72px;
+      height: 32px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--fg);
+      font: inherit;
+      font-size: 13px;
+      font-family: var(--font-mono);
+      padding: 0 8px;
+      text-align: right;
+    }
+    .setting-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      padding: 4px 0 2px;
+    }
+    .setting-stat {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: oklch(98% 0.006 250);
+      padding: 10px 12px;
+    }
+    .setting-stat-label { margin: 0 0 4px; font-size: 12px; color: var(--muted); }
+    .setting-stat-value { margin: 0; font-size: 16px; font-weight: 650; font-family: var(--font-mono); }
+    .path-box {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: oklch(97% 0.006 250);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      word-break: break-all;
+    }
+    .about-block {
+      display: grid;
+      gap: 6px;
+      padding: 14px 16px;
+    }
+    .about-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+    }
+    .about-row span:first-child { color: var(--muted); }
+
+    .btn:disabled,
+    .btn[disabled] {
+      opacity: 0.55;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    .btn-spinner {
+      width: 12px;
+      height: 12px;
+      border: 1.5px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .update-panel {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border-soft);
+      display: grid;
+      gap: 10px;
+    }
+    .update-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .update-head-meta {
+      min-width: 0;
+      display: grid;
+      gap: 4px;
+    }
+    .update-product {
+      font-size: 14px;
+      font-weight: 650;
+      margin: 0;
+      color: var(--fg);
+    }
+    .update-sub {
+      margin: 0;
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .update-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .update-inline {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .update-inline strong {
+      font-weight: 600;
+      color: var(--fg);
+    }
+    .update-banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 9px 11px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      font-size: 12.5px;
+      line-height: 1.45;
+    }
+    .update-banner.ok {
+      background: var(--success-bg);
+      border-color: oklch(88% 0.05 145);
+      color: var(--success);
+    }
+    .update-banner.fail {
+      background: var(--danger-bg);
+      border-color: oklch(90% 0.04 25);
+      color: var(--danger);
+    }
+    .update-banner.warn {
+      background: var(--warn-bg);
+      border-color: oklch(88% 0.04 85);
+      color: oklch(38% 0.06 75);
+    }
+    .update-banner.info {
+      background: oklch(96% 0.02 250);
+      border-color: oklch(90% 0.04 250);
+      color: oklch(38% 0.1 250);
+    }
+    .update-banner .mono { color: inherit; }
+    .update-notes {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 4px;
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+    .update-notes li {
+      display: flex;
+      gap: 6px;
+      line-height: 1.4;
+    }
+    .update-notes li::before {
+      content: "·";
+      color: oklch(70% 0.02 240);
+      flex-shrink: 0;
+    }
+    .update-progress {
+      display: grid;
+      gap: 6px;
+    }
+    .update-progress-track {
+      height: 6px;
+      border-radius: 999px;
+      background: oklch(93% 0.01 250);
+      overflow: hidden;
+    }
+    .update-progress-bar {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--accent);
+      transition: width 0.2s ease;
+    }
+    .update-progress-bar.indeterminate {
+      width: 36% !important;
+      animation: progress-slide 1.1s ease-in-out infinite;
+    }
+    @keyframes progress-slide {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(320%); }
+    }
+    .update-progress-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .update-preview-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding: 8px 10px;
+      margin: 0 -2px;
+      border-radius: 8px;
+      background: oklch(97.5% 0.006 250);
+      border: 1px dashed oklch(88% 0.015 250);
+    }
+    .update-preview-label {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-right: 2px;
+      white-space: nowrap;
+    }
+    .update-chip {
+      height: 26px;
+      padding: 0 9px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      background: transparent;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+    .update-chip:hover { background: oklch(95% 0.01 250); color: var(--fg); }
+    .update-chip.active {
+      background: oklch(93% 0.035 250);
+      color: oklch(40% 0.14 250);
+      border-color: oklch(88% 0.05 250);
+    }
+
+    .notice {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 10px 12px;
+      border: 1px solid oklch(88% 0.04 85);
+      background: var(--warn-bg);
+      border-radius: 8px;
+      font-size: 12.5px;
+      color: oklch(38% 0.06 75);
+      line-height: 1.45;
+    }
+    .notice strong { font-weight: 650; color: oklch(32% 0.07 70); }
+    .notice-icon {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      margin-top: 1px;
+      color: var(--warn);
+    }
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      min-height: 36px;
+    }
+    .check-row input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: var(--accent);
+    }
+    .action-type-select { max-width: 280px; }
+
+    /* Tray demo */
+    .desktop-hint {
+      width: min(1180px, 100%);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+      color: oklch(35% 0.02 240);
+      font-size: 12.5px;
+    }
+    .tray-area {
+      position: relative;
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+    }
+    .tray-btn {
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid oklch(80% 0.02 240 / 0.5);
+      background: oklch(100% 0 0 / 0.7);
+      backdrop-filter: blur(8px);
+      font-size: 12.5px;
+      font-weight: 550;
+      color: var(--fg);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tray-btn:hover { background: white; }
+    .tray-menu {
+      position: absolute;
+      right: 0;
+      bottom: 44px;
+      width: 220px;
+      background: oklch(28% 0.02 240 / 0.92);
+      color: oklch(96% 0.01 240);
+      border-radius: 10px;
+      padding: 6px;
+      box-shadow: 0 12px 32px oklch(20% 0.02 240 / 0.35);
+      backdrop-filter: blur(12px);
+      z-index: 20;
+    }
+    .tray-menu button {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      padding: 9px 10px;
+      border-radius: 7px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tray-menu button:hover { background: oklch(100% 0 0 / 0.1); }
+    .tray-menu .sep {
+      height: 1px;
+      background: oklch(100% 0 0 / 0.12);
+      margin: 4px 6px;
+    }
+    .tray-caption {
+      font-size: 11px;
+      opacity: 0.65;
+      padding: 4px 10px 6px;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 40px 0 0 0;
+      background: oklch(22% 0.02 240 / 0.28);
+      z-index: 30;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 28px 20px;
+      overflow: auto;
+    }
+    .modal {
+      width: min(720px, 100%);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      max-height: calc(100% - 8px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: var(--surface);
+    }
+    .modal-header h2 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 650;
+    }
+    .modal-body {
+      padding: 16px 18px 18px;
+      overflow: auto;
+    }
+
+    .run-flash {
+      animation: flash 0.8s ease;
+    }
+    @keyframes flash {
+      0% { background: oklch(94% 0.04 250); }
+      100% { background: transparent; }
+    }
+
+    @media (max-width: 860px) {
+      .shell { grid-template-columns: 1fr; }
+      .sidebar {
+        flex-direction: row;
+        flex-wrap: wrap;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+        padding: 8px;
+      }
+      .nav-label, .sidebar-foot { display: none; }
+      .nav-item { width: auto; }
+      .row-2 { grid-template-columns: 1fr; }
+      .app-window { height: auto; min-height: 640px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useMemo, useEffect, useRef } = React;
+
+    const Icon = {
+      tasks: (
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <rect x="2" y="2.5" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.4"/>
+          <path d="M5 6h6M5 8.5h6M5 11h3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+        </svg>
+      ),
+      logs: (
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M3 3.5h10v9H3z" stroke="currentColor" strokeWidth="1.4" rx="1"/>
+          <path d="M5.5 6.5h5M5.5 9h3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+        </svg>
+      ),
+      settings: (
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="8" cy="8" r="2.2" stroke="currentColor" strokeWidth="1.4"/>
+          <path d="M8 2.2v1.4M8 12.4v1.4M2.2 8h1.4M12.4 8h1.4M3.9 3.9l1 1M11.1 11.1l1 1M12.1 3.9l-1 1M4.9 11.1l-1 1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+        </svg>
+      ),
+      plus: (
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M7 2.5v9M2.5 7h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+        </svg>
+      ),
+      play: (
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+          <path d="M3.2 1.8v8.4L10.2 6 3.2 1.8z"/>
+        </svg>
+      ),
+      edit: (
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M8.2 2.8l3 3L4.5 12.5H1.5v-3L8.2 2.8z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+        </svg>
+      ),
+      more: (
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+          <circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="11" cy="7" r="1.2"/>
+        </svg>
+      ),
+      search: (
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <circle cx="6" cy="6" r="3.5" stroke="currentColor" strokeWidth="1.4"/>
+          <path d="M8.8 8.8L12 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+        </svg>
+      ),
+      tray: (
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <rect x="2" y="3" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+          <path d="M4 12h6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+        </svg>
+      ),
+      close: (
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <path d="M3 3l6 6M9 3L3 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
+      ),
+      chevron: (
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <path d="M3.5 4.5L6 7l2.5-2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      ),
+    };
+
+    const TRIGGER_LABELS = {
+      once: "一次性",
+      daily: "每天",
+      cron: "Cron",
+      interval: "间隔",
+    };
+
+    const ACTION_LABELS = {
+      open_app: "打开应用",
+      open_url: "打开网址",
+      run_script: "运行脚本",
+      wecom_ui_dm: "企业微信 · 发私聊",
+    };
+
+    const ACTION_TYPES = ["open_app", "open_url", "run_script", "wecom_ui_dm"];
+
+    const INITIAL_TASKS = [
+      {
+        id: "t1",
+        name: "打开早报网站",
+        enabled: true,
+        trigger: { type: "daily", time: "09:00", weekdays: [1,2,3,4,5,6,0] },
+        actions: [{ id: "a1", type: "open_url", url: "https://news.example.com" }],
+        lastRunAt: "2026-09-16 09:00:02",
+        lastStatus: "success",
+      },
+      {
+        id: "t4",
+        name: "给张三发送晨间提醒",
+        enabled: true,
+        trigger: { type: "cron", expr: "5 9 * * 1-5", note: "工作日 09:05" },
+        actions: [{
+          id: "a4",
+          type: "wecom_ui_dm",
+          contact: "张三",
+          message: "早上好，今日站会 09:30，请提前准备进度与风险点。",
+          launchWecom: true,
+          timeoutSec: 30,
+          retryCount: 1,
+          notifyOnFail: true,
+        }],
+        lastRunAt: "2026-09-16 09:05:12",
+        lastStatus: "success",
+      },
+      {
+        id: "t2",
+        name: "工作日备份脚本",
+        enabled: true,
+        trigger: { type: "cron", expr: "30 18 * * 1-5", note: "工作日 18:30" },
+        actions: [{ id: "a2", type: "run_script", runtime: "ps1", path: "D:/scripts/backup.ps1" }],
+        lastRunAt: "2026-09-15 18:30:05",
+        lastStatus: "success",
+      },
+      {
+        id: "t3",
+        name: "启动企业微信",
+        enabled: false,
+        trigger: { type: "cron", expr: "55 8 * * 1-5", note: "工作日 08:55" },
+        actions: [{
+          id: "a3",
+          type: "open_app",
+          path: "C:/Program Files (x86)/WXWork/WXWork.exe",
+          args: "",
+        }],
+        lastRunAt: "2026-09-12 08:55:01",
+        lastStatus: "failed",
+      },
+    ];
+
+    const INITIAL_LOGS = [
+      {
+        id: "l6",
+        taskId: "t4",
+        taskName: "给张三发送晨间提醒",
+        time: "2026-09-16 09:05:12",
+        status: "success",
+        detail: "动作[1/1] wecom_ui_dm\n插件: 企业微信 UI 自动化（私聊）\n联系人: 张三\n先启动企业微信: 是\n超时: 30s\n结果: 已定位私聊窗口并发送消息\n耗时: 4.2s",
+        steps: [
+          { title: "启动企业微信", status: "ok", time: "09:05:12.1", note: "进程已就绪" },
+          { title: "定位窗口", status: "ok", time: "09:05:13.0", note: "主窗口已置于前台" },
+          { title: "搜索联系人", status: "ok", time: "09:05:14.2", note: "匹配「张三」" },
+          { title: "输入消息", status: "ok", time: "09:05:15.4", note: "已填入文本" },
+          { title: "发送", status: "ok", time: "09:05:16.3", note: "发送成功 · 总耗时 4.2s" },
+        ],
+      },
+      {
+        id: "l1",
+        taskId: "t1",
+        taskName: "打开早报网站",
+        time: "2026-09-16 09:00:02",
+        status: "success",
+        detail: "动作[1/1] open_url\nURL: https://news.example.com\n结果: 已用默认浏览器打开\n耗时: 86ms",
+        steps: [
+          { title: "解析 URL", status: "ok", time: "09:00:02.01", note: "https://news.example.com" },
+          { title: "调用默认浏览器", status: "ok", time: "09:00:02.08", note: "已打开 · 86ms" },
+        ],
+      },
+      {
+        id: "l7",
+        taskId: "t4",
+        taskName: "给张三发送晨间提醒",
+        time: "2026-09-15 09:05:28",
+        status: "failed",
+        detail: "动作[1/1] wecom_ui_dm\n插件: 企业微信 UI 自动化（私聊）\n联系人: 张三\n错误: 未找到联系人「张三」，或企业微信窗口未置于前台\n建议: 确认通讯录名称一致，并保持企微主窗口可见\n退出码: 41",
+        steps: [
+          { title: "启动企业微信", status: "ok", time: "09:05:28.0", note: "进程已就绪" },
+          { title: "定位窗口", status: "fail", time: "09:05:29.4", note: "窗口未置于前台" },
+          { title: "搜索联系人", status: "fail", time: "09:05:30.1", note: "未找到「张三」" },
+          { title: "输入消息", status: "skip", time: "—", note: "已跳过" },
+          { title: "发送", status: "skip", time: "—", note: "已跳过 · 退出码 41" },
+        ],
+      },
+      {
+        id: "l2",
+        taskId: "t2",
+        taskName: "工作日备份脚本",
+        time: "2026-09-15 18:30:05",
+        status: "success",
+        detail: "动作[1/1] run_script (ps1)\n路径: D:/scripts/backup.ps1\n退出码: 0\nstdout: Backup completed. 128 files archived.",
+        steps: [
+          { title: "校验脚本路径", status: "ok", time: "18:30:05.01", note: "D:/scripts/backup.ps1" },
+          { title: "启动 PowerShell", status: "ok", time: "18:30:05.12", note: "退出码 0" },
+          { title: "收集输出", status: "ok", time: "18:30:08.40", note: "128 files archived" },
+        ],
+      },
+      {
+        id: "l3",
+        taskId: "t3",
+        taskName: "启动企业微信",
+        time: "2026-09-12 08:55:01",
+        status: "failed",
+        detail: "动作[1/1] open_app\n路径: C:/Program Files (x86)/WXWork/WXWork.exe\n错误: 找不到指定文件。请检查路径或安装位置。\n退出码: 2",
+        steps: [
+          { title: "解析应用路径", status: "ok", time: "08:55:01.01", note: "WXWork.exe" },
+          { title: "启动进程", status: "fail", time: "08:55:01.04", note: "找不到指定文件 · 退出码 2" },
+        ],
+      },
+      {
+        id: "l4",
+        taskId: "t1",
+        taskName: "打开早报网站",
+        time: "2026-09-15 09:00:03",
+        status: "success",
+        detail: "动作[1/1] open_url\nURL: https://news.example.com\n结果: 已用默认浏览器打开\n耗时: 74ms",
+        steps: [
+          { title: "解析 URL", status: "ok", time: "09:00:03.01", note: "https://news.example.com" },
+          { title: "调用默认浏览器", status: "ok", time: "09:00:03.07", note: "已打开 · 74ms" },
+        ],
+      },
+      {
+        id: "l5",
+        taskId: "t2",
+        taskName: "工作日备份脚本",
+        time: "2026-09-12 18:30:08",
+        status: "failed",
+        detail: "动作[1/1] run_script (ps1)\n路径: D:/scripts/backup.ps1\n退出码: 1\nstderr: Access denied writing to D:/backup/archive.zip",
+        steps: [
+          { title: "校验脚本路径", status: "ok", time: "18:30:08.01", note: "D:/scripts/backup.ps1" },
+          { title: "启动 PowerShell", status: "ok", time: "18:30:08.10", note: "进程已启动" },
+          { title: "写入归档", status: "fail", time: "18:30:09.22", note: "Access denied · 退出码 1" },
+        ],
+      },
+    ];
+
+    function summarizeTrigger(trigger) {
+      if (!trigger) return "—";
+      if (trigger.type === "once") return `一次性 · ${trigger.datetime || "未设置"}`;
+      if (trigger.type === "daily") return `每天 ${trigger.time || "--:--"}`;
+      if (trigger.type === "interval") return `每 ${trigger.every || "?"} ${trigger.unit || "分钟"}`;
+      if (trigger.type === "cron") return trigger.note || trigger.expr || "Cron";
+      return TRIGGER_LABELS[trigger.type] || "—";
+    }
+
+    function summarizeActions(actions = []) {
+      if (!actions.length) return "无动作";
+      return actions.map((a) => {
+        if (a.type === "open_url") return `打开网址 · ${a.url}`;
+        if (a.type === "open_app") return `打开应用 · ${shortPath(a.path)}`;
+        if (a.type === "run_script") return `运行脚本 · ${a.runtime?.toUpperCase() || "SCRIPT"} · ${shortPath(a.path)}`;
+        if (a.type === "wecom_ui_dm") return `企业微信私聊 · ${a.contact || "未指定联系人"}`;
+        return ACTION_LABELS[a.type] || a.type;
+      }).join("；");
+    }
+
+    function shortPath(p = "") {
+      if (!p) return "未设置";
+      const parts = p.replace(/\\/g, "/").split("/");
+      return parts.length > 2 ? `…/${parts.slice(-2).join("/")}` : p;
+    }
+
+    function uid(prefix) {
+      return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    function emptyAction() {
+      return {
+        id: uid("a"),
+        type: "open_url",
+        url: "",
+        path: "",
+        runtime: "ps1",
+        args: "",
+        contact: "",
+        message: "",
+        launchWecom: true,
+        timeoutSec: 30,
+        retryCount: 0,
+        notifyOnFail: true,
+      };
+    }
+
+    function stepStatusLabel(status) {
+      if (status === "ok") return "成功";
+      if (status === "fail") return "失败";
+      return "跳过";
+    }
+
+    function buildWecomSteps(action, ok) {
+      const contact = action.contact || "—";
+      if (ok) {
+        return [
+          { title: "启动企业微信", status: action.launchWecom ? "ok" : "skip", time: "+0.1s", note: action.launchWecom ? "进程已就绪" : "跳过启动" },
+          { title: "定位窗口", status: "ok", time: "+0.9s", note: "主窗口已置于前台" },
+          { title: "搜索联系人", status: "ok", time: "+1.8s", note: `匹配「${contact}」` },
+          { title: "输入消息", status: "ok", time: "+2.6s", note: "已填入文本" },
+          { title: "发送", status: "ok", time: "+3.4s", note: "发送成功" },
+        ];
+      }
+      return [
+        { title: "启动企业微信", status: action.launchWecom ? "ok" : "skip", time: "+0.1s", note: action.launchWecom ? "进程已就绪" : "跳过启动" },
+        { title: "定位窗口", status: "fail", time: "+1.0s", note: "窗口未置于前台" },
+        { title: "搜索联系人", status: "fail", time: "+1.6s", note: `未找到「${contact}」` },
+        { title: "输入消息", status: "skip", time: "—", note: "已跳过" },
+        { title: "发送", status: "skip", time: "—", note: "已跳过" },
+      ];
+    }
+
+    function emptyTask() {
+      return {
+        id: uid("t"),
+        name: "",
+        enabled: true,
+        trigger: { type: "daily", time: "09:00", weekdays: [1,2,3,4,5], datetime: "", expr: "0 9 * * *", every: 30, unit: "分钟", note: "" },
+        actions: [emptyAction()],
+        lastRunAt: null,
+        lastStatus: null,
+      };
+    }
+
+    function TitleBar() {
+      return (
+        <div className="titlebar" data-od-id="titlebar">
+          <div className="titlebar-left">
+            <div className="app-mark">AT</div>
+            <div className="titlebar-title" data-od-id="window-title">
+              Auto Task
+              <span className="titlebar-sub">本地定时任务调度器</span>
+            </div>
+          </div>
+          <div className="window-controls" aria-label="窗口控制">
+            <button className="win-btn" title="最小化" data-od-id="win-min" type="button">
+              <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 5h8" stroke="currentColor" strokeWidth="1.4"/></svg>
+            </button>
+            <button className="win-btn" title="最大化" data-od-id="win-max" type="button">
+              <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.3" fill="none"/></svg>
+            </button>
+            <button className="win-btn close" title="关闭到托盘" data-od-id="win-close" type="button">{Icon.close}</button>
+          </div>
+        </div>
+      );
+    }
+
+    function Sidebar({ page, setPage, taskCount, failCount }) {
+      const items = [
+        { id: "tasks", label: "任务", icon: Icon.tasks, badge: taskCount },
+        { id: "logs", label: "执行日志", icon: Icon.logs, badge: failCount > 0 ? failCount : null },
+        { id: "settings", label: "设置", icon: Icon.settings },
+      ];
+      return (
+        <aside className="sidebar" data-od-id="sidebar">
+          <div className="nav-label">导航</div>
+          {items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`nav-item${page === item.id ? " active" : ""}`}
+              data-od-id={`nav-${item.id}`}
+              onClick={() => setPage(item.id)}
+            >
+              <span className="icon">{item.icon}</span>
+              {item.label}
+              {item.badge != null && <span className="badge">{item.badge}</span>}
+            </button>
+          ))}
+          <div className="sidebar-foot">
+            <div className="status-chip" data-od-id="scheduler-status">
+              <span className="dot" />
+              调度器运行中 · 托盘常驻
+            </div>
+          </div>
+        </aside>
+      );
+    }
+
+    function TaskListView({
+      tasks, filter, setFilter,
+      onCreate, onEdit, onToggle, onRun, onDuplicate, onDelete, flashId, forceEmpty,
+    }) {
+      const [menu, setMenu] = useState(null);
+      const menuRef = useRef(null);
+
+      useEffect(() => {
+        function onDoc(e) {
+          if (menuRef.current && !menuRef.current.contains(e.target)) setMenu(null);
+        }
+        document.addEventListener("mousedown", onDoc);
+        return () => document.removeEventListener("mousedown", onDoc);
+      }, []);
+
+      const filtered = useMemo(() => {
+        if (forceEmpty) return [];
+        return tasks.filter((t) => {
+          if (filter === "enabled" && !t.enabled) return false;
+          if (filter === "disabled" && t.enabled) return false;
+          return true;
+        });
+      }, [tasks, filter, forceEmpty]);
+
+      const enabledCount = tasks.filter((t) => t.enabled).length;
+      const disabledCount = tasks.length - enabledCount;
+
+      return (
+        <div className="content">
+          <div className="notice" data-od-id="ui-automation-notice" style={{ marginBottom: 12 }}>
+            <svg className="notice-icon" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+              <circle cx="9" cy="9" r="7.2" stroke="currentColor" strokeWidth="1.4"/>
+              <path d="M9 5.2v5.2M9 12.6h.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            <div>
+              <strong>UI 自动化插件</strong>
+              ：企业微信 · 发私聊依赖窗口控件定位。企微改版、窗口未前台或联系人名称不一致可能导致失败；首版仅支持私聊，不含群聊。建议保存前先做预检。
+            </div>
+          </div>
+
+          <div className="subbar" data-od-id="tasks-toolbar">
+            <div className="filter-group" data-od-id="task-filter">
+              {[
+                { id: "all", label: `全部 ${tasks.length}` },
+                { id: "enabled", label: `已启用 ${enabledCount}` },
+                { id: "disabled", label: `已禁用 ${disabledCount}` },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  className={`filter-chip${filter === f.id ? " active" : ""}`}
+                  onClick={() => setFilter(f.id)}
+                  data-od-id={`task-filter-${f.id}`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <div className="muted" style={{ fontSize: 12.5 }}>
+              {forceEmpty ? "空状态预览中" : `当前展示 ${filtered.length} 条`}
+            </div>
+          </div>
+
+          <div className="card" data-od-id="task-list-card">
+            {filtered.length === 0 ? (
+              <div className="empty" data-od-id="tasks-empty">
+                <div className="empty-icon">{Icon.tasks}</div>
+                <h3>{tasks.length === 0 || forceEmpty ? "还没有任务" : "没有匹配的任务"}</h3>
+                <p>
+                  {tasks.length === 0 || forceEmpty
+                    ? "点击右上角「新建任务」创建第一条定时任务，例如每天打开早报、运行备份脚本或发送企微私聊。"
+                    : "试试切换「全部 / 已启用 / 已禁用」，或清空搜索关键词。"}
+                </p>
+                {(tasks.length === 0 || forceEmpty) && (
+                  <div style={{ marginTop: 14 }}>
+                    <button className="btn btn-primary" type="button" onClick={onCreate}>{Icon.plus} 新建任务</button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="task-list" data-od-id="task-table">
+                {filtered.map((task) => (
+                  <div
+                    key={task.id}
+                    className={`task-row${flashId === task.id ? " run-flash" : ""}`}
+                    data-od-id={`task-row-${task.id}`}
+                  >
+                    <div className="task-row-toggle">
+                      <button
+                        type="button"
+                        className={`switch${task.enabled ? " on" : ""}`}
+                        aria-pressed={task.enabled}
+                        aria-label={task.enabled ? "禁用任务" : "启用任务"}
+                        data-od-id={`task-switch-${task.id}`}
+                        onClick={() => onToggle(task.id)}
+                      />
+                    </div>
+                    <div className="task-row-main">
+                      <div className="task-row-title">
+                        <span className="name" title={task.name}>{task.name}</span>
+                        <span className={`pill ${task.enabled ? "pill-on" : "pill-off"}`}>
+                          <span className="pill-dot" />
+                          {task.enabled ? "已启用" : "已禁用"}
+                        </span>
+                      </div>
+                      <div className="task-row-summary">
+                        <span className="pill pill-info">{TRIGGER_LABELS[task.trigger.type]}</span>
+                        <span className="mono">{summarizeTrigger(task.trigger)}</span>
+                        <span className="sep" aria-hidden="true" />
+                        <span className="sum-text" title={summarizeActions(task.actions)}>
+                          {ACTION_LABELS[task.actions[0]?.type] || "—"}
+                          {" · "}
+                          {summarizeActions(task.actions)}
+                          {task.actions.length > 1 ? ` 等 ${task.actions.length} 项` : ""}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="task-row-aside">
+                      <div className="task-row-last">
+                        {task.lastRunAt ? (
+                          <>
+                            <span className={`pill ${task.lastStatus === "success" ? "pill-ok" : "pill-fail"}`}>
+                              <span className="pill-dot" />
+                              {task.lastStatus === "success" ? "最近成功" : "最近失败"}
+                            </span>
+                            <div className="task-meta mono">{task.lastRunAt}</div>
+                          </>
+                        ) : (
+                          <span className="muted">尚未执行</span>
+                        )}
+                      </div>
+                      <div className="row-actions">
+                        <button
+                          className="btn btn-primary btn-sm"
+                          type="button"
+                          title="立即执行"
+                          data-od-id={`task-run-${task.id}`}
+                          onClick={() => onRun(task.id)}
+                        >
+                          {Icon.play} 执行
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          type="button"
+                          title="编辑"
+                          data-od-id={`task-edit-${task.id}`}
+                          onClick={() => onEdit(task)}
+                        >
+                          {Icon.edit} 编辑
+                        </button>
+                        <button
+                          className="btn-icon"
+                          type="button"
+                          title="更多"
+                          data-od-id={`task-more-${task.id}`}
+                          onClick={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const parent = e.currentTarget.closest(".app-window").getBoundingClientRect();
+                            setMenu({
+                              id: task.id,
+                              top: rect.bottom - parent.top + 4,
+                              left: Math.min(rect.right - parent.left - 168, parent.width - 180),
+                            });
+                          }}
+                        >
+                          {Icon.more}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {menu && (
+            <div
+              className="menu"
+              ref={menuRef}
+              style={{ top: menu.top, left: menu.left }}
+              data-od-id="task-more-menu"
+            >
+              <button type="button" onClick={() => { onDuplicate(menu.id); setMenu(null); }}>复制任务</button>
+              <div className="menu-sep" />
+              <button type="button" className="danger" onClick={() => { onDelete(menu.id); setMenu(null); }}>删除</button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function TaskEditor({ draft, onChange, onSave, onCancel, isNew, showToast }) {
+      const update = (patch) => onChange({ ...draft, ...patch });
+      const updateTrigger = (patch) => update({ trigger: { ...draft.trigger, ...patch } });
+      const updateAction = (idx, patch) => {
+        const actions = draft.actions.map((a, i) => (i === idx ? { ...a, ...patch } : a));
+        update({ actions });
+      };
+      const addAction = () => update({ actions: [...draft.actions, emptyAction()] });
+      const removeAction = (idx) => {
+        if (draft.actions.length <= 1) return;
+        update({ actions: draft.actions.filter((_, i) => i !== idx) });
+      };
+
+      const canSave = draft.name.trim() && draft.actions.every((a) => {
+        if (a.type === "open_url") return !!a.url.trim();
+        if (a.type === "wecom_ui_dm") return !!a.contact?.trim() && !!a.message?.trim();
+        return !!a.path?.trim();
+      });
+
+      const runWecomPrecheck = (action, kind) => {
+        const contact = (action.contact || "").trim();
+        if (kind === "locate") {
+          if (!contact) {
+            showToast("请先填写联系人，再测试定位窗口");
+            return;
+          }
+          showToast(`已定位企业微信窗口，并预搜到「${contact}」`);
+          return;
+        }
+        if (!contact || !(action.message || "").trim()) {
+          showToast("请先填写联系人与消息内容，再试发送");
+          return;
+        }
+        showToast(`试发送成功：已向「${contact}」模拟发送私聊`);
+      };
+
+      return (
+        <div className="overlay" data-od-id="task-editor-overlay" onClick={(e) => e.target === e.currentTarget && onCancel()}>
+          <div className="modal" data-od-id="task-editor" role="dialog" aria-modal="true">
+            <div className="modal-header">
+              <h2 data-od-id="editor-title">{isNew ? "新建任务" : "编辑任务"}</h2>
+              <button className="btn-icon" type="button" onClick={onCancel} aria-label="关闭">{Icon.close}</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-grid">
+                <div className="field" data-od-id="field-name">
+                  <label htmlFor="task-name">任务名称</label>
+                  <input
+                    id="task-name"
+                    className="input"
+                    value={draft.name}
+                    placeholder="例如：工作日备份脚本"
+                    onChange={(e) => update({ name: e.target.value })}
+                  />
+                </div>
+
+                <div className="field" data-od-id="field-trigger">
+                  <label>触发器</label>
+                  <div className="seg" style={{ marginBottom: 10 }}>
+                    {["once", "daily", "cron", "interval"].map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        className={draft.trigger.type === type ? "active" : ""}
+                        data-od-id={`trigger-type-${type}`}
+                        onClick={() => updateTrigger({ type })}
+                      >
+                        {TRIGGER_LABELS[type]}
+                      </button>
+                    ))}
+                  </div>
+
+                  {draft.trigger.type === "once" && (
+                    <input
+                      className="input"
+                      type="datetime-local"
+                      value={draft.trigger.datetime || ""}
+                      onChange={(e) => updateTrigger({ datetime: e.target.value })}
+                    />
+                  )}
+                  {draft.trigger.type === "daily" && (
+                    <div className="row-2">
+                      <input
+                        className="input"
+                        type="time"
+                        value={draft.trigger.time || "09:00"}
+                        onChange={(e) => updateTrigger({ time: e.target.value })}
+                      />
+                      <div className="hint" style={{ alignSelf: "center", margin: 0 }}>每天固定时刻触发</div>
+                    </div>
+                  )}
+                  {draft.trigger.type === "cron" && (
+                    <>
+                      <input
+                        className="input mono"
+                        value={draft.trigger.expr || ""}
+                        placeholder="30 18 * * 1-5"
+                        onChange={(e) => updateTrigger({ expr: e.target.value })}
+                      />
+                      <div className="hint">标准 5 段 cron。示例：工作日 18:30 → <span className="mono">30 18 * * 1-5</span></div>
+                      <input
+                        className="input"
+                        style={{ marginTop: 8 }}
+                        value={draft.trigger.note || ""}
+                        placeholder="可读摘要（可选），如：工作日 18:30"
+                        onChange={(e) => updateTrigger({ note: e.target.value })}
+                      />
+                    </>
+                  )}
+                  {draft.trigger.type === "interval" && (
+                    <div className="row-2">
+                      <input
+                        className="input"
+                        type="number"
+                        min="1"
+                        value={draft.trigger.every || 30}
+                        onChange={(e) => updateTrigger({ every: Number(e.target.value) })}
+                      />
+                      <select
+                        className="select"
+                        value={draft.trigger.unit || "分钟"}
+                        onChange={(e) => updateTrigger({ unit: e.target.value })}
+                      >
+                        <option>分钟</option>
+                        <option>小时</option>
+                        <option>秒</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                <div className="field" data-od-id="field-actions">
+                  <div className="action-head" style={{ marginBottom: 8 }}>
+                    <label style={{ margin: 0 }}>动作列表</label>
+                    <button className="btn btn-secondary btn-sm" type="button" data-od-id="btn-add-action" onClick={addAction}>
+                      {Icon.plus} 添加动作
+                    </button>
+                  </div>
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {draft.actions.map((action, idx) => (
+                      <div className="action-block" key={action.id} data-od-id={`action-block-${idx}`}>
+                        <div className="action-head">
+                          <div className="action-title">
+                            <span className="pill pill-info">#{idx + 1}</span>
+                            {ACTION_LABELS[action.type]}
+                          </div>
+                          <button
+                            className="btn btn-danger-ghost btn-sm"
+                            type="button"
+                            disabled={draft.actions.length <= 1}
+                            onClick={() => removeAction(idx)}
+                          >
+                            删除
+                          </button>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6, display: "block" }}>动作类型</label>
+                          <select
+                            className="select action-type-select"
+                            data-od-id={`action-type-${idx}`}
+                            value={action.type}
+                            onChange={(e) => updateAction(idx, { type: e.target.value })}
+                          >
+                            {ACTION_TYPES.map((type) => (
+                              <option key={type} value={type}>{ACTION_LABELS[type]}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {action.type === "open_url" && (
+                          <input
+                            className="input mono"
+                            placeholder="https://news.example.com"
+                            value={action.url || ""}
+                            onChange={(e) => updateAction(idx, { url: e.target.value })}
+                          />
+                        )}
+                        {action.type === "open_app" && (
+                          <>
+                            <input
+                              className="input mono"
+                              placeholder="C:/Program Files/.../app.exe"
+                              value={action.path || ""}
+                              onChange={(e) => updateAction(idx, { path: e.target.value })}
+                            />
+                            <input
+                              className="input mono"
+                              placeholder="启动参数（可选）"
+                              value={action.args || ""}
+                              onChange={(e) => updateAction(idx, { args: e.target.value })}
+                            />
+                          </>
+                        )}
+                        {action.type === "run_script" && (
+                          <>
+                            <div className="row-2">
+                              <select
+                                className="select"
+                                value={action.runtime || "ps1"}
+                                onChange={(e) => updateAction(idx, { runtime: e.target.value })}
+                              >
+                                <option value="ps1">PowerShell (.ps1)</option>
+                                <option value="bat">批处理 (.bat)</option>
+                                <option value="python">Python (.py)</option>
+                              </select>
+                              <input
+                                className="input mono"
+                                placeholder="D:/scripts/backup.ps1"
+                                value={action.path || ""}
+                                onChange={(e) => updateAction(idx, { path: e.target.value })}
+                              />
+                            </div>
+                            <textarea
+                              className="textarea"
+                              placeholder="额外参数（可选）"
+                              value={action.args || ""}
+                              onChange={(e) => updateAction(idx, { args: e.target.value })}
+                            />
+                          </>
+                        )}
+                        {action.type === "wecom_ui_dm" && (
+                          <>
+                            <div className="notice" data-od-id={`wecom-risk-${idx}`}>
+                              <svg className="notice-icon" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                                <circle cx="9" cy="9" r="7.2" stroke="currentColor" strokeWidth="1.4"/>
+                                <path d="M9 5.2v5.2M9 12.6h.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                              </svg>
+                              <div>此动作为 UI 自动化，依赖窗口控件；企微改版、窗口未前台或联系人名称不一致可能导致失败。首版仅私聊。建议先点下方预检。</div>
+                            </div>
+                            <div className="step-stack" data-od-id={`wecom-steps-${idx}`}>
+                              <div className="step-card">
+                                <div className="step-head"><span className="step-num">1</span>联系人</div>
+                                <p className="step-hint">填写与企业微信通讯录完全一致的显示名，避免重名歧义。</p>
+                                <input
+                                  className="input"
+                                  data-od-id={`wecom-contact-${idx}`}
+                                  placeholder="例如：张三"
+                                  value={action.contact || ""}
+                                  onChange={(e) => updateAction(idx, { contact: e.target.value })}
+                                />
+                              </div>
+                              <div className="step-card">
+                                <div className="step-head"><span className="step-num">2</span>消息内容</div>
+                                <p className="step-hint">将写入私聊输入框并发送。请避免敏感或批量骚扰内容。</p>
+                                <textarea
+                                  className="textarea"
+                                  data-od-id={`wecom-message-${idx}`}
+                                  placeholder="输入要发送的私聊消息"
+                                  value={action.message || ""}
+                                  onChange={(e) => updateAction(idx, { message: e.target.value })}
+                                />
+                              </div>
+                              <div className="step-card">
+                                <div className="step-head"><span className="step-num">3</span>先启动企业微信</div>
+                                <p className="step-hint">若企微未运行，可先拉起客户端再定位窗口。</p>
+                                <label className="check-row" data-od-id={`wecom-launch-${idx}`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={!!action.launchWecom}
+                                    onChange={(e) => updateAction(idx, { launchWecom: e.target.checked })}
+                                  />
+                                  执行前自动启动企业微信
+                                </label>
+                              </div>
+                              <div className="step-card">
+                                <div className="step-head"><span className="step-num">4</span>超时秒数</div>
+                                <p className="step-hint">单步等待上限。窗口卡顿或搜索慢时可适当加大。</p>
+                                <input
+                                  className="input mono"
+                                  type="number"
+                                  min="5"
+                                  max="180"
+                                  data-od-id={`wecom-timeout-${idx}`}
+                                  value={action.timeoutSec ?? 30}
+                                  onChange={(e) => updateAction(idx, { timeoutSec: Number(e.target.value) || 30 })}
+                                />
+                              </div>
+                            </div>
+                            <div className="precheck-row" data-od-id={`wecom-precheck-${idx}`}>
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                type="button"
+                                data-od-id={`wecom-test-locate-${idx}`}
+                                onClick={() => runWecomPrecheck(action, "locate")}
+                              >
+                                测试定位窗口
+                              </button>
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                type="button"
+                                data-od-id={`wecom-test-send-${idx}`}
+                                onClick={() => runWecomPrecheck(action, "send")}
+                              >
+                                试发送
+                              </button>
+                              <span className="muted" style={{ fontSize: 12 }}>预检仅模拟结果，不真正发消息</span>
+                            </div>
+                            <div className="fallback-box" data-od-id={`wecom-fallback-${idx}`}>
+                              <p className="fallback-title">失败兜底</p>
+                              <div className="row-2">
+                                <div>
+                                  <label style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6, display: "block" }}>失败重试次数</label>
+                                  <input
+                                    className="input mono"
+                                    type="number"
+                                    min="0"
+                                    max="5"
+                                    data-od-id={`wecom-retry-${idx}`}
+                                    value={action.retryCount ?? 0}
+                                    onChange={(e) => updateAction(idx, { retryCount: Math.max(0, Number(e.target.value) || 0) })}
+                                  />
+                                </div>
+                                <label className="check-row" style={{ alignSelf: "end" }} data-od-id={`wecom-notify-${idx}`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={action.notifyOnFail !== false}
+                                    onChange={(e) => updateAction(idx, { notifyOnFail: e.target.checked })}
+                                  />
+                                  失败后系统通知
+                                </label>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="hint">内置动作：打开应用 / 网址 / 脚本；可插拔扩展：企业微信 · 发私聊（UI 自动化，仅私聊）。</div>
+                </div>
+
+                <div className="form-footer">
+                  <button className="btn btn-secondary" type="button" data-od-id="btn-cancel-task" onClick={onCancel}>取消</button>
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    data-od-id="btn-save-task"
+                    disabled={!canSave}
+                    onClick={onSave}
+                    style={{ opacity: canSave ? 1 : 0.55 }}
+                  >
+                    保存
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function LogsView({ logs, filter, setFilter, query }) {
+      const [expanded, setExpanded] = useState({ l6: true });
+      const filtered = useMemo(() => {
+        return logs.filter((l) => {
+          if (filter === "success" && l.status !== "success") return false;
+          if (filter === "failed" && l.status !== "failed") return false;
+          if (!query.trim()) return true;
+          const q = query.trim().toLowerCase();
+          return l.taskName.toLowerCase().includes(q) || l.detail.toLowerCase().includes(q) || l.time.includes(q);
+        });
+      }, [logs, filter, query]);
+
+      const successCount = logs.filter((l) => l.status === "success").length;
+      const failedCount = logs.filter((l) => l.status === "failed").length;
+
+      return (
+        <div className="content">
+          <div className="subbar">
+            <div className="filter-group" data-od-id="log-filter">
+              {[
+                { id: "all", label: `全部 ${logs.length}` },
+                { id: "success", label: `成功 ${successCount}` },
+                { id: "failed", label: `失败 ${failedCount}` },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  className={`filter-chip${filter === f.id ? " active" : ""}`}
+                  onClick={() => setFilter(f.id)}
+                  data-od-id={`log-filter-${f.id}`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <div className="muted" style={{ fontSize: 12.5 }}>展开条目可查看步骤时间线</div>
+          </div>
+
+          <div className="card" data-od-id="log-list-card">
+            {filtered.length === 0 ? (
+              <div className="empty" data-od-id="logs-empty">
+                <div className="empty-icon">{Icon.logs}</div>
+                <h3>{logs.length === 0 ? "暂无执行记录" : "没有匹配的日志"}</h3>
+                <p>{logs.length === 0 ? "任务执行后会在这里留下成功或失败记录，并展示步骤时间线。" : "试试调整筛选条件或清空搜索。"}</p>
+              </div>
+            ) : (
+              <table className="task-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 36 }}></th>
+                    <th style={{ width: 168 }}>时间</th>
+                    <th>任务</th>
+                    <th style={{ width: 110 }}>结果</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((log) => {
+                    const open = !!expanded[log.id];
+                    return (
+                      <React.Fragment key={log.id}>
+                        <tr
+                          className="log-row"
+                          data-od-id={`log-row-${log.id}`}
+                          onClick={() => setExpanded((s) => ({ ...s, [log.id]: !open }))}
+                        >
+                          <td style={{ color: "var(--muted)" }}>
+                            <span style={{ display: "inline-block", transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }}>
+                              {Icon.chevron}
+                            </span>
+                          </td>
+                          <td className="mono">{log.time}</td>
+                          <td>{log.taskName}</td>
+                          <td>
+                            <span className={`pill ${log.status === "success" ? "pill-ok" : "pill-fail"}`}>
+                              <span className="pill-dot" />
+                              {log.status === "success" ? "成功" : "失败"}
+                            </span>
+                          </td>
+                        </tr>
+                        {open && (
+                          <tr data-od-id={`log-detail-${log.id}`}>
+                            <td colSpan={4} style={{ padding: 0 }}>
+                              <div className="log-detail">
+                                {Array.isArray(log.steps) && log.steps.length > 0 ? (
+                                  <ul className="timeline" data-od-id={`log-timeline-${log.id}`}>
+                                    {log.steps.map((step, i) => (
+                                      <li className="timeline-item" key={`${log.id}-step-${i}`}>
+                                        <span className={`tl-dot ${step.status}`} />
+                                        <div className="tl-body">
+                                          <div className="tl-title">
+                                            {step.title}
+                                            <span className={`pill ${step.status === "ok" ? "pill-ok" : step.status === "fail" ? "pill-fail" : "pill-off"}`}>
+                                              {stepStatusLabel(step.status)}
+                                            </span>
+                                          </div>
+                                          <div className="tl-meta">{step.time} · {step.note}</div>
+                                        </div>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : null}
+                                <div className="log-detail-raw">{log.detail}</div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    const UPDATE_PREVIEW_STATES = [
+      { id: "idle", label: "默认" },
+      { id: "checking", label: "检查中" },
+      { id: "latest", label: "已是最新" },
+      { id: "available", label: "发现新版本" },
+      { id: "downloading", label: "下载中" },
+      { id: "ready", label: "即将退出" },
+      { id: "error", label: "失败" },
+    ];
+
+    const UPDATE_DEMO = {
+      currentVersion: "0.1.0",
+      latestVersion: "0.2.0",
+      notes: [
+        "修复托盘菜单偶发无响应",
+        "企微私聊预检增加超时提示",
+        "设置页补充应用内自动更新",
+      ],
+      downloadProgress: 62,
+      errorMessage: "无法读取 GitHub Releases latest.json（网络或仓库权限）",
+    };
+
+    function UpdatePanel({ state, onCheck, onDownload, onLater, onRetry, onConfirmInstall }) {
+      const current = UPDATE_DEMO.currentVersion;
+      const latest = UPDATE_DEMO.latestVersion;
+
+      return (
+        <div className="update-panel" data-od-id="update-panel">
+          <div className="update-head">
+            <div className="update-head-meta">
+              <p className="update-product">时序 · TaskTick</p>
+              <p className="update-sub">
+                当前版本 <span className="mono">{current}</span>
+                {" · "}
+                更新源 GitHub Releases
+              </p>
+            </div>
+            <div className="update-actions">
+              {state === "idle" && (
+                <button className="btn btn-primary btn-sm" type="button" data-od-id="update-check" onClick={onCheck}>
+                  检查更新
+                </button>
+              )}
+              {state === "checking" && (
+                <button className="btn btn-primary btn-sm" type="button" disabled data-od-id="update-checking">
+                  <span className="btn-spinner" aria-hidden="true" />
+                  检查中…
+                </button>
+              )}
+              {state === "latest" && (
+                <button className="btn btn-secondary btn-sm" type="button" data-od-id="update-recheck" onClick={onCheck}>
+                  重新检查
+                </button>
+              )}
+              {state === "available" && (
+                <>
+                  <button className="btn btn-ghost btn-sm" type="button" data-od-id="update-later" onClick={onLater}>
+                    稍后
+                  </button>
+                  <button className="btn btn-primary btn-sm" type="button" data-od-id="update-download" onClick={onDownload}>
+                    下载并安装
+                  </button>
+                </>
+              )}
+              {state === "downloading" && (
+                <button className="btn btn-primary btn-sm" type="button" disabled data-od-id="update-downloading">
+                  <span className="btn-spinner" aria-hidden="true" />
+                  下载中…
+                </button>
+              )}
+              {state === "ready" && (
+                <button className="btn btn-primary btn-sm" type="button" data-od-id="update-install" onClick={onConfirmInstall}>
+                  退出并安装
+                </button>
+              )}
+              {state === "error" && (
+                <button className="btn btn-primary btn-sm" type="button" data-od-id="update-retry" onClick={onRetry}>
+                  重试
+                </button>
+              )}
+            </div>
+          </div>
+
+          {state === "latest" && (
+            <div className="update-banner ok" data-od-id="update-latest" role="status">
+              <span className="pill pill-ok" style={{ height: 20, padding: "0 7px" }}>
+                <span className="pill-dot" />
+                最新
+              </span>
+              <span>当前已是最新版本 <span className="mono">{current}</span></span>
+            </div>
+          )}
+
+          {state === "available" && (
+            <div data-od-id="update-available">
+              <div className="update-inline" style={{ marginBottom: 8 }}>
+                <span className="pill pill-info">发现新版本</span>
+                <span>
+                  <span className="mono">{current}</span>
+                  {" → "}
+                  <strong className="mono">{latest}</strong>
+                </span>
+              </div>
+              <ul className="update-notes">
+                {UPDATE_DEMO.notes.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {state === "downloading" && (
+            <div className="update-progress" data-od-id="update-progress">
+              <div className="update-progress-meta">
+                <span>正在下载 <span className="mono">{latest}</span>…</span>
+                <span className="mono">{UPDATE_DEMO.downloadProgress}%</span>
+              </div>
+              <div className="update-progress-track" aria-hidden="true">
+                <div
+                  className="update-progress-bar"
+                  style={{ width: `${UPDATE_DEMO.downloadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {state === "ready" && (
+            <div className="update-banner warn" data-od-id="update-ready" role="status">
+              <span>
+                安装包 <span className="mono">{latest}</span> 已就绪。安装过程中应用将退出（托盘常驻调度会短暂中断），完成后请手动重新打开。
+              </span>
+            </div>
+          )}
+
+          {state === "error" && (
+            <div className="update-banner fail" data-od-id="update-error" role="alert">
+              <span>检查更新失败：{UPDATE_DEMO.errorMessage}</span>
+            </div>
+          )}
+
+          {state === "idle" && (
+            <p className="update-sub" data-od-id="update-idle-hint" style={{ margin: 0 }}>
+              人工 Publish 到 GitHub Releases 后，「检查更新」才会读到最新 <span className="mono">latest.json</span>。
+            </p>
+          )}
+
+          {state === "checking" && (
+            <div className="update-inline" data-od-id="update-checking-hint">
+              <span className="btn-spinner" style={{ color: "var(--accent)" }} aria-hidden="true" />
+              <span>正在查询 GitHub Releases…</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const SETTINGS_TABS = [
+      { id: "general", label: "通用" },
+      { id: "schedule", label: "调度" },
+      { id: "wecom", label: "企微" },
+      { id: "data", label: "数据" },
+      { id: "about", label: "关于" },
+    ];
+
+    function SettingsView({ settings, setSettings, showToast }) {
+      const [settingsTab, setSettingsTab] = useState("general");
+      const [updateState, setUpdateState] = useState("idle");
+
+      const patch = (key, value, toastMsg) => {
+        setSettings((s) => ({ ...s, [key]: value }));
+        if (toastMsg) showToast(toastMsg);
+      };
+
+      return (
+        <div className="content">
+          <div className="settings-wrap" data-od-id="settings-wrap">
+            <div className="settings-tabs" role="tablist" aria-label="设置分组" data-od-id="settings-tabs">
+              {SETTINGS_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={settingsTab === tab.id}
+                  className={`settings-tab${settingsTab === tab.id ? " active" : ""}`}
+                  data-od-id={`settings-tab-${tab.id}`}
+                  onClick={() => setSettingsTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="settings-stack" role="tabpanel" data-od-id={`settings-panel-${settingsTab}`}>
+              {settingsTab === "general" && (
+                <>
+                  <div className="card" data-od-id="settings-general">
+                    <div className="setting-row">
+                      <div>
+                        <p className="setting-title">开机自启</p>
+                        <p className="setting-desc">登录 Windows 后自动启动 TaskTick，并在托盘常驻调度。</p>
+                      </div>
+                      <button
+                        type="button"
+                        className={`switch${settings.autoStart ? " on" : ""}`}
+                        aria-pressed={settings.autoStart}
+                        data-od-id="setting-autostart"
+                        onClick={() => patch("autoStart", !settings.autoStart, settings.autoStart ? "已关闭开机自启" : "已开启开机自启")}
+                      />
+                    </div>
+                    <div className="setting-row">
+                      <div>
+                        <p className="setting-title">关闭窗口时最小化到托盘</p>
+                        <p className="setting-desc">点击标题栏关闭时不退出进程，继续在后台执行任务。</p>
+                      </div>
+                      <button
+                        type="button"
+                        className={`switch${settings.minimizeToTray ? " on" : ""}`}
+                        aria-pressed={settings.minimizeToTray}
+                        data-od-id="setting-tray"
+                        onClick={() => patch("minimizeToTray", !settings.minimizeToTray, settings.minimizeToTray ? "关闭窗口将退出应用" : "关闭窗口将最小化到托盘")}
+                      />
+                    </div>
+                    <div className="setting-row">
+                      <div>
+                        <p className="setting-title">失败通知总开关</p>
+                        <p className="setting-desc">任务失败时发送系统通知；可在单任务动作里单独关闭。</p>
+                      </div>
+                      <button
+                        type="button"
+                        className={`switch${settings.failNotify ? " on" : ""}`}
+                        aria-pressed={settings.failNotify}
+                        data-od-id="setting-fail-notify"
+                        onClick={() => patch("failNotify", !settings.failNotify, settings.failNotify ? "已关闭失败通知" : "已开启失败通知")}
+                      />
+                    </div>
+                    <div className="setting-row">
+                      <div>
+                        <p className="setting-title">通知权限</p>
+                        <p className="setting-desc">Windows 通知中心权限。被系统拦截时失败提醒将不可见。</p>
+                      </div>
+                      <div className="setting-inline-actions">
+                        <span className={`pill${settings.notifyGranted ? " pill-ok" : " pill-warn"}`}>
+                          <span className="pill-dot" />
+                          {settings.notifyGranted ? "已授权" : "未授权"}
+                        </span>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          type="button"
+                          data-od-id="setting-notify-check"
+                          onClick={() => {
+                            patch("notifyGranted", true);
+                            showToast("已检测到通知权限（原型）");
+                          }}
+                        >
+                          检测权限
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="card" data-od-id="settings-general-reset">
+                    <div className="setting-row">
+                      <div>
+                        <p className="setting-title">重置默认</p>
+                        <p className="setting-desc">恢复通用与调度相关默认值，不会删除任务与日志。</p>
+                      </div>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        type="button"
+                        data-od-id="setting-reset-defaults"
+                        onClick={() => {
+                          setSettings((s) => ({
+                            ...s,
+                            autoStart: true,
+                            minimizeToTray: true,
+                            failNotify: true,
+                            schedulerPaused: false,
+                            missPolicy: "skip",
+                            wecomIdleOnly: true,
+                            wecomIdleSec: 8,
+                          }));
+                          showToast("已恢复默认设置");
+                        }}
+                      >
+                        重置
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {settingsTab === "schedule" && (
+                <div className="card" data-od-id="settings-schedule">
+                  <div className="setting-row">
+                    <div>
+                      <p className="setting-title">调度器状态</p>
+                      <p className="setting-desc">托盘常驻时由后台计时器触发任务；暂停后不会执行任何计划。</p>
+                    </div>
+                    <span className={`pill${settings.schedulerPaused ? " pill-off" : " pill-ok"}`} data-od-id="scheduler-status">
+                      <span className="pill-dot" />
+                      {settings.schedulerPaused ? "已暂停" : "运行中"}
+                    </span>
+                  </div>
+                  <div className="setting-row">
+                    <div>
+                      <p className="setting-title">暂停调度</p>
+                      <p className="setting-desc">临时挂起全部定时触发，手动「立即执行」仍可用。</p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`switch${settings.schedulerPaused ? " on" : ""}`}
+                      aria-pressed={settings.schedulerPaused}
+                      data-od-id="setting-pause-scheduler"
+                      onClick={() => patch("schedulerPaused", !settings.schedulerPaused, settings.schedulerPaused ? "调度已恢复" : "调度已暂停")}
+                    />
+                  </div>
+                  <div className="setting-row">
+                    <div>
+                      <p className="setting-title">错过补跑策略</p>
+                      <p className="setting-desc">休眠或进程未启动导致错过触发点时的处理方式。</p>
+                    </div>
+                    <select
+                      className="setting-select"
+                      value={settings.missPolicy}
+                      data-od-id="setting-miss-policy"
+                      onChange={(e) => patch("missPolicy", e.target.value, "已更新错过补跑策略")}
+                    >
+                      <option value="skip">跳过（默认）</option>
+                      <option value="once">补跑最近一次</option>
+                      <option value="queue">排队补跑全部</option>
+                    </select>
+                  </div>
+                  <div className="setting-row">
+                    <div>
+                      <p className="setting-title">时区</p>
+                      <p className="setting-desc">Cron / 每日触发按本机时区解释；夏令时变更不会自动迁移表达式。</p>
+                    </div>
+                    <span className="setting-meta mono" data-od-id="setting-timezone">{settings.timezone}</span>
+                  </div>
+                </div>
+              )}
+
+              {settingsTab === "wecom" && (
+                <>
+                  <div className="card" data-od-id="settings-wecom-agent">
+                    <div className="setting-row">
+                      <div>
+                        <p className="setting-title">FlaUI Agent</p>
+                        <p className="setting-desc">驱动「企业微信 · 发私聊」控件操作。关闭后该动作类型不可执行。</p>
+                      </div>
+                      <button
+                        type="button"
+                        className={`switch${settings.flauiEnabled ? " on" : ""}`}
+                        aria-pressed={settings.flauiEnabled}
+                        data-od-id="setting-flaui"
+                        onClick={() => patch("flauiEnabled", !settings.flauiEnabled, settings.flauiEnabled ? "已关闭 FlaUI Agent" : "已开启 FlaUI Agent")}
+                      />
+                    </div>
+                    <div className="setting-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+                      <div>
+                        <p className="setting-title">Agent 路径</p>
+                        <p className="setting-desc">可执行文件位置；安装包会写入默认路径，也可手动指定。</p>
+                      </div>
+                      <div className="path-box" data-od-id="flaui-path">
+                        <span>{settings.flauiPath}</span>
+                        <div className="setting-inline-actions">
+                          <span className={`pill${settings.flauiDetected ? " pill-ok" : " pill-fail"}`}>
+                            <span className="pill-dot" />
+                            {settings.flauiDetected ? "已检测到" : "未找到"}
+                          </span>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            type="button"
+                            data-od-id="flaui-probe"
+                            onClick={() => {
+                              patch("flauiDetected", true);
+                              showToast("已探测到 FlaUI Agent");
+                            }}
+                          >
+                            重新探测
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="setting-row">
+                      <div>
+                        <p className="setting-title">失败回退</p>
+                        <p className="setting-desc">控件操作失败时回退为仅启动企微（不发送消息），并写入失败日志。</p>
+                      </div>
+                      <button
+                        type="button"
+                        className={`switch${settings.flauiFallback ? " on" : ""}`}
+                        aria-pressed={settings.flauiFallback}
+                        data-od-id="setting-flaui-fallback"
+                        onClick={() => patch("flauiFallback", !settings.flauiFallback, settings.flauiFallback ? "已关闭失败回退" : "已开启失败回退")}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="card" data-od-id="settings-wecom-idle">
+                    <div className="setting-row">
+                      <div>
+                        <p className="setting-title">仅在企微空闲时发送</p>
+                        <p className="setting-desc">避免打断正在输入的会话；超时则记为失败并可按动作配置重试。</p>
+                      </div>
+                      <button
+                        type="button"
+                        className={`switch${settings.wecomIdleOnly ? " on" : ""}`}
+                        aria-pressed={settings.wecomIdleOnly}
+                        data-od-id="setting-wecom-idle"
+                        onClick={() => patch("wecomIdleOnly", !settings.wecomIdleOnly, settings.wecomIdleOnly ? "已关闭空闲发送限制" : "仅在空闲时发送")}
+                      />
+                    </div>
+                    <div className="setting-row">
+                      <div>
+                        <p className="setting-title">空闲判定秒数</p>
+                        <p className="setting-desc">连续无键盘/鼠标输入达到该秒数后视为空闲。</p>
+                      </div>
+                      <div className="setting-inline-actions">
+                        <input
+                          className="setting-number"
+                          type="number"
+                          min="1"
+                          max="120"
+                          value={settings.wecomIdleSec}
+                          data-od-id="setting-wecom-idle-sec"
+                          disabled={!settings.wecomIdleOnly}
+                          onChange={(e) => {
+                            const n = Math.max(1, Math.min(120, Number(e.target.value) || 1));
+                            patch("wecomIdleSec", n);
+                          }}
+                        />
+                        <span className="setting-meta">秒</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card" data-od-id="settings-plugins">
+                    <div className="setting-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+                      <div>
+                        <p className="setting-title">UI 自动化说明</p>
+                        <p className="setting-desc">与「打开应用」不同：插件会操作界面控件发消息，而不是只启动进程。</p>
+                      </div>
+                      <div style={{ display: "grid", gap: 8, fontSize: 13, color: "var(--fg)" }}>
+                        <div>· 能力：定位企微窗口 → 搜索联系人 → 输入 → 发送（仅私聊）</div>
+                        <div>· 风险：企微改版、锁屏、窗口未前台、联系人重名/未找到可能导致失败</div>
+                        <div>· 建议：新建或编辑后先点「测试定位窗口 / 试发送」做预检</div>
+                      </div>
+                      <div className="notice" data-od-id="settings-ui-risk">
+                        <svg className="notice-icon" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                          <circle cx="9" cy="9" r="7.2" stroke="currentColor" strokeWidth="1.4"/>
+                          <path d="M9 5.2v5.2M9 12.6h.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
+                        <div>
+                          <strong>风险提示</strong>
+                          ：依赖企业微信窗口结构。改版后需更新插件适配。失败时可配置重试与系统通知。
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {settingsTab === "data" && (
+                <>
+                  <div className="card" data-od-id="settings-data">
+                    <div className="setting-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+                      <div>
+                        <p className="setting-title">数据目录</p>
+                        <p className="setting-desc">任务定义、执行日志与扩展配置存放于此。</p>
+                      </div>
+                      <div className="path-box" data-od-id="data-dir">
+                        <span>{settings.dataDir}</span>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          type="button"
+                          onClick={() => showToast("已复制数据目录路径")}
+                        >
+                          复制
+                        </button>
+                      </div>
+                    </div>
+                    <div className="setting-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+                      <div>
+                        <p className="setting-title">存储文件</p>
+                        <p className="setting-desc">目录内主要文件与缓存（只读展示）。</p>
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }} data-od-id="store-files">
+                        {settings.storeFiles.map((f) => (
+                          <span key={f} className="pill pill-info mono" style={{ fontFamily: "var(--font-mono)" }}>{f}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="setting-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                      <div>
+                        <p className="setting-title">本地计数</p>
+                        <p className="setting-desc">当前工作区条目规模，便于排查数据膨胀。</p>
+                      </div>
+                      <div className="setting-stat-grid" data-od-id="data-counts">
+                        <div className="setting-stat">
+                          <p className="setting-stat-label">任务</p>
+                          <p className="setting-stat-value">{settings.taskCount}</p>
+                        </div>
+                        <div className="setting-stat">
+                          <p className="setting-stat-label">日志</p>
+                          <p className="setting-stat-value">{settings.logCount}</p>
+                        </div>
+                        <div className="setting-stat">
+                          <p className="setting-stat-label">插件</p>
+                          <p className="setting-stat-value">{settings.pluginCount}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="card" data-od-id="settings-data-io">
+                    <div className="setting-row">
+                      <div>
+                        <p className="setting-title">任务导入 / 导出</p>
+                        <p className="setting-desc">导出为 JSON；导入时合并同名任务并保留启用状态。</p>
+                      </div>
+                      <div className="setting-inline-actions">
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          type="button"
+                          data-od-id="tasks-import"
+                          onClick={() => showToast("已选择导入文件（原型）")}
+                        >
+                          导入
+                        </button>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          type="button"
+                          data-od-id="tasks-export"
+                          onClick={() => showToast("已导出 tasks.json（原型）")}
+                        >
+                          导出
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {settingsTab === "about" && (
+                <div className="card" data-od-id="settings-about">
+                  <div className="about-block">
+                    <p className="setting-title" style={{ marginBottom: 8 }}>应用信息</p>
+                    <div className="about-row"><span>应用</span><span>时序 · TaskTick</span></div>
+                    <div className="about-row"><span>版本</span><span className="mono">{UPDATE_DEMO.currentVersion}</span></div>
+                    <div className="about-row"><span>运行时</span><span>Tauri 2 · Windows 托盘常驻</span></div>
+                    <div className="about-row"><span>内置动作</span><span>打开应用 / 网址 / 脚本</span></div>
+                    <div className="about-row"><span>插件动作</span><span>企业微信 · 发私聊（UI 自动化）</span></div>
+
+                    <div className="update-preview-bar" data-od-id="update-preview-bar">
+                      <span className="update-preview-label">更新态预览</span>
+                      {UPDATE_PREVIEW_STATES.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          className={`update-chip${updateState === s.id ? " active" : ""}`}
+                          data-od-id={`update-preview-${s.id}`}
+                          onClick={() => setUpdateState(s.id)}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <UpdatePanel
+                      state={updateState}
+                      onCheck={() => {
+                        setUpdateState("checking");
+                        showToast("正在检查更新…");
+                        window.setTimeout(() => setUpdateState("available"), 900);
+                      }}
+                      onDownload={() => {
+                        setUpdateState("downloading");
+                        showToast("开始下载更新包");
+                        window.setTimeout(() => setUpdateState("ready"), 1200);
+                      }}
+                      onLater={() => {
+                        setUpdateState("idle");
+                        showToast("已延后更新");
+                      }}
+                      onRetry={() => {
+                        setUpdateState("checking");
+                        showToast("正在重试检查更新…");
+                        window.setTimeout(() => setUpdateState("latest"), 900);
+                      }}
+                      onConfirmInstall={() => {
+                        showToast("即将退出并安装更新（原型演示）");
+                        setUpdateState("ready");
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function TopBar({
+      page, taskQuery, setTaskQuery, logQuery, setLogQuery,
+      onCreate, onRefresh, forceEmpty, setForceEmpty, taskCount,
+    }) {
+      const meta = {
+        tasks: { title: "任务", desc: "管理定时任务与动作，支持企微私聊插件" },
+        logs: { title: "执行日志", desc: "查看调度结果与步骤时间线" },
+        settings: { title: "设置", desc: "通用 · 调度 · 企微 · 数据 · 关于" },
+      }[page] || { title: "Auto Task", desc: "" };
+
+      return (
+        <div className="topbar" data-od-id="topbar">
+          <div className="topbar-left">
+            <h1 className="topbar-title" data-od-id={`${page}-title`}>{meta.title}</h1>
+            <p className="topbar-desc">{meta.desc}</p>
+          </div>
+          <div className="topbar-actions">
+            {page === "tasks" && (
+              <>
+                <div className="search-wrap" style={{ minWidth: 200, maxWidth: 260, flex: "0 1 260px" }}>
+                  {Icon.search}
+                  <input
+                    className="search"
+                    placeholder="搜索任务名、触发器或动作"
+                    value={taskQuery}
+                    onChange={(e) => setTaskQuery(e.target.value)}
+                    data-od-id="task-search"
+                  />
+                </div>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  type="button"
+                  data-od-id="btn-refresh-tasks"
+                  onClick={onRefresh}
+                >
+                  刷新
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  type="button"
+                  data-od-id="btn-toggle-empty"
+                  onClick={() => setForceEmpty((v) => !v)}
+                  title="切换空状态示意"
+                >
+                  {forceEmpty ? "恢复列表" : "空状态"}
+                </button>
+                <button className="btn btn-primary" type="button" data-od-id="btn-new-task" onClick={onCreate}>
+                  {Icon.plus} 新建任务
+                </button>
+              </>
+            )}
+            {page === "logs" && (
+              <>
+                <div className="search-wrap" style={{ minWidth: 200, maxWidth: 280, flex: "0 1 280px" }}>
+                  {Icon.search}
+                  <input
+                    className="search"
+                    placeholder="搜索任务名或详情"
+                    value={logQuery}
+                    onChange={(e) => setLogQuery(e.target.value)}
+                    data-od-id="log-search"
+                  />
+                </div>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  type="button"
+                  data-od-id="btn-refresh-logs"
+                  onClick={onRefresh}
+                >
+                  刷新
+                </button>
+              </>
+            )}
+            {page === "settings" && (
+              <button
+                className="btn btn-secondary btn-sm"
+                type="button"
+                data-od-id="btn-refresh-settings"
+                onClick={onRefresh}
+              >
+                刷新
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [page, setPage] = useState("tasks");
+      const [tasks, setTasks] = useState(INITIAL_TASKS);
+      const [logs, setLogs] = useState(INITIAL_LOGS);
+      const [taskQuery, setTaskQuery] = useState("");
+      const [taskFilter, setTaskFilter] = useState("all");
+      const [logQuery, setLogQuery] = useState("");
+      const [logFilter, setLogFilter] = useState("all");
+      const [editor, setEditor] = useState(null);
+      const [toast, setToast] = useState(null);
+      const [flashId, setFlashId] = useState(null);
+      const [trayOpen, setTrayOpen] = useState(true);
+      const [forceEmpty, setForceEmpty] = useState(false);
+      const [settings, setSettings] = useState({
+        autoStart: true,
+        minimizeToTray: true,
+        failNotify: true,
+        notifyGranted: true,
+        schedulerPaused: false,
+        missPolicy: "skip",
+        timezone: "Asia/Shanghai (UTC+8)",
+        flauiEnabled: true,
+        flauiPath: "C:/Program Files/TaskTick/agents/FlaUI.Agent.exe",
+        flauiDetected: true,
+        flauiFallback: true,
+        wecomIdleOnly: true,
+        wecomIdleSec: 8,
+        dataDir: "C:/Users/Jinsp/AppData/Roaming/AutoTask",
+        storeFiles: ["tasks.json", "logs.jsonl", "plugins.json", "update-cache/"],
+        taskCount: 4,
+        logCount: 6,
+        pluginCount: 1,
+      });
+
+      const showToast = (message) => {
+        setToast(message);
+        window.clearTimeout(showToast._t);
+        showToast._t = window.setTimeout(() => setToast(null), 2200);
+      };
+
+      const failCount = logs.filter((l) => l.status === "failed").length;
+
+      const visibleTasks = useMemo(() => {
+        const q = taskQuery.trim().toLowerCase();
+        if (!q) return tasks;
+        return tasks.filter((t) => (
+          t.name.toLowerCase().includes(q) ||
+          summarizeTrigger(t.trigger).toLowerCase().includes(q) ||
+          summarizeActions(t.actions).toLowerCase().includes(q)
+        ));
+      }, [tasks, taskQuery]);
+
+      const openCreate = () => setEditor({ mode: "create", draft: emptyTask() });
+      const openEdit = (task) => setEditor({
+        mode: "edit",
+        draft: JSON.parse(JSON.stringify({
+          ...task,
+          actions: (task.actions || []).map((a) => ({
+            retryCount: 0,
+            notifyOnFail: true,
+            launchWecom: true,
+            timeoutSec: 30,
+            ...a,
+          })),
+          trigger: {
+            datetime: "",
+            time: "09:00",
+            expr: "0 9 * * *",
+            every: 30,
+            unit: "分钟",
+            note: "",
+            weekdays: [1,2,3,4,5],
+            ...task.trigger,
+          },
+        })),
+      });
+
+      const saveEditor = () => {
+        const draft = editor.draft;
+        if (editor.mode === "create") {
+          setTasks((list) => [{ ...draft, lastRunAt: null, lastStatus: null }, ...list]);
+          showToast(`已创建任务「${draft.name}」`);
+        } else {
+          setTasks((list) => list.map((t) => (t.id === draft.id ? { ...t, ...draft } : t)));
+          showToast(`已保存「${draft.name}」`);
+        }
+        setEditor(null);
+        setForceEmpty(false);
+        setPage("tasks");
+      };
+
+      const toggleTask = (id) => {
+        setTasks((list) => list.map((t) => {
+          if (t.id !== id) return t;
+          const enabled = !t.enabled;
+          showToast(enabled ? `已启用「${t.name}」` : `已禁用「${t.name}」`);
+          return { ...t, enabled };
+        }));
+      };
+
+      const runTask = (id) => {
+        const task = tasks.find((t) => t.id === id);
+        if (!task) return;
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        const time = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+        const action = task.actions[0] || {};
+        let status = "success";
+        let detail = "";
+        let steps = [];
+
+        if (action.type === "open_app" && (action.path || "").includes("WXWork")) {
+          status = "failed";
+          detail = `手动执行\n动作[1/${task.actions.length}] open_app\n路径: ${action.path}\n错误: 找不到指定文件。请检查路径或安装位置。\n退出码: 2`;
+          steps = [
+            { title: "解析应用路径", status: "ok", time: "+0.01s", note: shortPath(action.path) },
+            { title: "启动进程", status: "fail", time: "+0.04s", note: "找不到指定文件 · 退出码 2" },
+          ];
+        } else if (action.type === "wecom_ui_dm") {
+          status = "success";
+          const cost = (2 + Math.random() * 3).toFixed(1);
+          detail = `手动执行\n动作[1/${task.actions.length}] wecom_ui_dm\n插件: 企业微信 UI 自动化（私聊）\n联系人: ${action.contact || "—"}\n先启动企业微信: ${action.launchWecom ? "是" : "否"}\n超时: ${action.timeoutSec ?? 30}s\n重试: ${action.retryCount ?? 0}\n失败通知: ${action.notifyOnFail !== false ? "开" : "关"}\n结果: 已定位私聊窗口并发送消息\n耗时: ${cost}s`;
+          steps = buildWecomSteps(action, true);
+        } else if (action.type === "open_url") {
+          detail = `手动执行\n动作[1/${task.actions.length}] open_url\nURL: ${action.url}\n结果: 已用默认浏览器打开\n耗时: ${40 + Math.floor(Math.random() * 80)}ms`;
+          steps = [
+            { title: "解析 URL", status: "ok", time: "+0.01s", note: action.url || "—" },
+            { title: "调用默认浏览器", status: "ok", time: "+0.08s", note: "已打开" },
+          ];
+        } else if (action.type === "run_script") {
+          detail = `手动执行\n动作[1/${task.actions.length}] run_script (${action.runtime || "ps1"})\n路径: ${action.path}\n结果: 已触发本地执行器\n耗时: ${40 + Math.floor(Math.random() * 80)}ms`;
+          steps = [
+            { title: "校验脚本路径", status: "ok", time: "+0.01s", note: shortPath(action.path) },
+            { title: "启动运行时", status: "ok", time: "+0.10s", note: (action.runtime || "ps1").toUpperCase() },
+            { title: "收集输出", status: "ok", time: "+0.40s", note: "执行完成" },
+          ];
+        } else {
+          detail = `手动执行\n动作[1/${task.actions.length}] ${action.type || "unknown"}\n结果: 已触发本地执行器\n耗时: ${40 + Math.floor(Math.random() * 80)}ms`;
+          steps = [{ title: "触发本地执行器", status: "ok", time: "+0.05s", note: "已完成" }];
+        }
+
+        setLogs((list) => [{
+          id: uid("l"),
+          taskId: task.id,
+          taskName: task.name,
+          time,
+          status,
+          detail,
+          steps,
+        }, ...list]);
+        setTasks((list) => list.map((t) => t.id === id ? { ...t, lastRunAt: time, lastStatus: status } : t));
+        setFlashId(id);
+        window.setTimeout(() => setFlashId(null), 800);
+        showToast(status === "success" ? `已执行「${task.name}」` : `「${task.name}」执行失败`);
+        if (status === "failed") setPage("logs");
+      };
+
+      const duplicateTask = (id) => {
+        const task = tasks.find((t) => t.id === id);
+        if (!task) return;
+        const copy = {
+          ...JSON.parse(JSON.stringify(task)),
+          id: uid("t"),
+          name: `${task.name}（副本）`,
+          enabled: false,
+          lastRunAt: null,
+          lastStatus: null,
+        };
+        setTasks((list) => [copy, ...list]);
+        showToast(`已复制「${task.name}」`);
+      };
+
+      const deleteTask = (id) => {
+        const task = tasks.find((t) => t.id === id);
+        setTasks((list) => list.filter((t) => t.id !== id));
+        showToast(task ? `已删除「${task.name}」` : "已删除任务");
+      };
+
+      const refreshPage = () => {
+        if (page === "tasks") showToast(`已刷新任务列表（${tasks.length} 条）`);
+        else if (page === "logs") showToast(`已刷新执行日志（${logs.length} 条）`);
+        else showToast("已刷新设置");
+      };
+
+      return (
+        <div className="stage">
+          <div className="app-window" data-od-id="app-window">
+            <TitleBar />
+            <div className="shell">
+              <Sidebar
+                page={page}
+                setPage={(id) => { setPage(id); setForceEmpty(false); }}
+                taskCount={tasks.length}
+                failCount={failCount}
+              />
+              <main className="main" data-od-id="main-content">
+                <TopBar
+                  page={page}
+                  taskQuery={taskQuery}
+                  setTaskQuery={setTaskQuery}
+                  logQuery={logQuery}
+                  setLogQuery={setLogQuery}
+                  onCreate={openCreate}
+                  onRefresh={refreshPage}
+                  forceEmpty={forceEmpty}
+                  setForceEmpty={setForceEmpty}
+                  taskCount={tasks.length}
+                />
+                {page === "tasks" && (
+                  <TaskListView
+                    tasks={visibleTasks}
+                    filter={taskFilter}
+                    setFilter={setTaskFilter}
+                    onCreate={openCreate}
+                    onEdit={openEdit}
+                    onToggle={toggleTask}
+                    onRun={runTask}
+                    onDuplicate={duplicateTask}
+                    onDelete={deleteTask}
+                    flashId={flashId}
+                    forceEmpty={forceEmpty}
+                  />
+                )}
+                {page === "logs" && (
+                  <LogsView
+                    logs={logs}
+                    filter={logFilter}
+                    setFilter={setLogFilter}
+                    query={logQuery}
+                  />
+                )}
+                {page === "settings" && (
+                  <SettingsView settings={settings} setSettings={setSettings} showToast={showToast} />
+                )}
+              </main>
+            </div>
+
+            {editor && (
+              <TaskEditor
+                draft={editor.draft}
+                isNew={editor.mode === "create"}
+                onChange={(draft) => setEditor((e) => ({ ...e, draft }))}
+                onSave={saveEditor}
+                onCancel={() => setEditor(null)}
+                showToast={showToast}
+              />
+            )}
+
+            {toast && (
+              <div className="toast" data-od-id="toast" role="status">{toast}</div>
+            )}
+          </div>
+
+          <div className="desktop-hint" data-od-id="tray-demo">
+            <div>
+              桌面示意：主窗口为管理界面；右下角托盘菜单可快速打开、重载或退出。
+            </div>
+            <div className="tray-area">
+              {trayOpen && (
+                <div className="tray-menu" data-od-id="tray-menu">
+                  <div className="tray-caption">Auto Task</div>
+                  <button
+                    type="button"
+                    data-od-id="tray-open"
+                    onClick={() => { setTrayOpen(false); setPage("tasks"); showToast("已打开管理界面"); }}
+                  >
+                    {Icon.tray} 打开管理界面
+                  </button>
+                  <button
+                    type="button"
+                    data-od-id="tray-reload"
+                    onClick={() => { showToast(`已重新加载任务（${tasks.length} 条）`); setTrayOpen(false); }}
+                  >
+                    ↻ 重新加载任务
+                  </button>
+                  <div className="sep" />
+                  <button
+                    type="button"
+                    data-od-id="tray-exit"
+                    onClick={() => { showToast("退出需二次确认（原型示意）"); setTrayOpen(false); }}
+                  >
+                    退出
+                  </button>
+                </div>
+              )}
+              <button
+                className="tray-btn"
+                type="button"
+                data-od-id="tray-icon"
+                onClick={() => setTrayOpen((v) => !v)}
+              >
+                <span className="app-mark" style={{ width: 16, height: 16, fontSize: 9 }}>AT</span>
+                系统托盘 · Auto Task
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    Object.assign(window, { App });
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
