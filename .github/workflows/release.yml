@@ -80,7 +80,7 @@ jobs:
         run: |
           npm run agent:stage
           $staged = "src-tauri/binaries/wecom-agent-x86_64-pc-windows-msvc.exe"
-          if (-not (Test-Path $staged)) { throw "sidecar 未生成: $staged" }
+          if (-not (Test-Path $staged)) { throw "sidecar missing: $staged" }
           New-Item -ItemType Directory -Force -Path "dist-agent" | Out-Null
           Copy-Item $staged "dist-agent/wecom-agent.exe" -Force
           Compress-Archive -Path "dist-agent\wecom-agent.exe" -DestinationPath "wecom-agent-windows-x64.zip" -Force

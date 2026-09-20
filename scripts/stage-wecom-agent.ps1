@@ -1,7 +1,7 @@
-# 将 wecom-agent 发布为自包含单文件，并复制到 src-tauri/binaries/
-# 供 Tauri bundle.externalBin 打入安装包（与 TaskTick.exe 同目录）。
-# 用法（仓库根目录）:
-#   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stage-wecom-agent.ps1
+# Stage self-contained wecom-agent.exe into src-tauri/binaries/ for Tauri externalBin.
+# Usage (repo root):
+#   pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/stage-wecom-agent.ps1
+# Keep this file ASCII-only so Windows PowerShell 5.1 (CI default via npm) can parse it.
 
 $ErrorActionPreference = "Stop"
 
@@ -16,10 +16,10 @@ $stagedPath = Join-Path $binariesDir $stagedName
 $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
 if (-not $dotnet) {
   $fallback = "C:\Program Files\dotnet\dotnet.exe"
-  if (Test-Path $fallback) {
+  if (Test-Path -LiteralPath $fallback) {
     $dotnetExe = $fallback
   } else {
-    throw "未找到 dotnet。请安装 .NET 10 SDK：https://dotnet.microsoft.com/download"
+    throw "dotnet not found. Install .NET 10 SDK: https://dotnet.microsoft.com/download"
   }
 } else {
   $dotnetExe = $dotnet.Source
@@ -38,16 +38,17 @@ Write-Host "publish -> $publishDir"
   -o $publishDir
 
 if ($LASTEXITCODE -ne 0) {
-  throw "dotnet publish 失败，exit=$LASTEXITCODE"
+  throw "dotnet publish failed, exit=$LASTEXITCODE"
 }
 
 $srcExe = Join-Path $publishDir "wecom-agent.exe"
-if (-not (Test-Path $srcExe)) {
-  throw "未生成 wecom-agent.exe: $srcExe"
+if (-not (Test-Path -LiteralPath $srcExe)) {
+  throw "wecom-agent.exe not generated: $srcExe"
 }
 
 New-Item -ItemType Directory -Force -Path $binariesDir | Out-Null
 Copy-Item -LiteralPath $srcExe -Destination $stagedPath -Force
 
 $len = (Get-Item -LiteralPath $stagedPath).Length
-Write-Host ("staged: {0} ({1:N1} MB)" -f $stagedPath, ($len / 1MB))
+$mb = [math]::Round($len / 1MB, 1)
+Write-Host "staged: $stagedPath ($mb MB)"
