@@ -68,7 +68,7 @@ pub fn resolve_agent_path(settings: &WecomAgentSettings) -> Option<PathBuf> {
         }
     }
 
-    // 与当前 exe 同目录（安装包 / externalBin 分发）
+    // 与当前 exe 同目录（用户自行解压 zip 放置）
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             let p = dir.join("wecom-agent.exe");
@@ -80,7 +80,7 @@ pub fn resolve_agent_path(settings: &WecomAgentSettings) -> Option<PathBuf> {
 
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
-    // 本地已 stage 的自包含 sidecar（npm run agent:stage）
+    // 本地已 stage 的自包含产物（npm run agent:stage，开发用）
     let staged = manifest
         .join("binaries")
         .join("wecom-agent-x86_64-pc-windows-msvc.exe");
@@ -183,7 +183,7 @@ pub fn send(
 }
 
 fn missing_agent_msg() -> String {
-    "未找到 wecom-agent.exe。正式安装包应已随 TaskTick.exe 同目录分发；开发环境请执行 npm run agent:stage，或设置 wecomAgent.path / 环境变量 AUTO_TASK_WECOM_AGENT。"
+    "未找到 wecom-agent.exe。请从 GitHub Release 下载 wecom-agent-windows-x64.zip，解压后在设置中指定路径，或放到与 TaskTick.exe 同目录；也可设置环境变量 AUTO_TASK_WECOM_AGENT。"
         .into()
 }
 

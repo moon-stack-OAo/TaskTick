@@ -29,7 +29,7 @@ release-notes.md
 # Rust / Tauri
 src-tauri/target
 src-tauri/gen/schemas
-# externalBin 产物（由 scripts/stage-wecom-agent.ps1 生成，勿入库）
+# agent:stage 产物（CI 打 zip 用，勿入库）
 src-tauri/binaries/wecom-agent-*.exe
 
 # .NET / wecom-agent

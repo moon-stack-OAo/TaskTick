@@ -42,13 +42,14 @@ npm run tauri build
 
 ### 企微 FlaUI Agent（可选）
 
+安装包**不含** Agent。发版时 CI 产出 `wecom-agent-windows-x64.zip`（自包含）；设置页可下载、选路径并检测。
+
 ```bash
-npm run agent:stage
+npm run agent:stage   # 本地：自包含 → src-tauri/binaries/
+npm run agent:build   # 开发调试（framework-dependent）
 ```
 
-产物：`src-tauri/binaries/wecom-agent-x86_64-pc-windows-msvc.exe`（自包含）。  
-`npm run tauri:build` 会先 stage，再经 `externalBin` 打进安装目录（与 `TaskTick.exe` 同目录）。  
-开发调试也可用 `npm run agent:build`（framework-dependent）。协议见 [`docs/wecom-agent.md`](./docs/wecom-agent.md)。
+协议见 [`docs/wecom-agent.md`](./docs/wecom-agent.md)。
 
 ## CI / 发版
 

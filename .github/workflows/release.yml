@@ -75,7 +75,7 @@ jobs:
       - name: Install npm deps
         run: npm ci
 
-      - name: Stage wecom-agent (self-contained sidecar)
+      - name: Package wecom-agent zip (optional addon, not in installer)
         shell: pwsh
         run: |
           npm run agent:stage
@@ -93,7 +93,7 @@ jobs:
           $pattern = "(?ms)^## \[$([regex]::Escape($ver))\].*?(?=^## |\z)"
           $m = [regex]::Match($raw, $pattern)
           if (-not $m.Success) { throw "无法从 CHANGELOG 截取 $ver" }
-          $extra = "`n`n---`n安装包由 CI 自动构建（含 updater 签名产物与 ``latest.json``）。安装目录已随附自包含 ``wecom-agent.exe``（与 TaskTick.exe 同目录）；附件 ``wecom-agent-windows-x64.zip`` 为同一 Agent 的独立副本。`n`n**应用内更新**：Release 保持 draft 时客户端读不到 ``latest.json``；人工确认后请 Publish，更新通道才会生效。`n"
+          $extra = "`n`n---`n安装包由 CI 自动构建（含 updater 签名产物与 ``latest.json``）。FlaUI Agent **不**打入安装包；请下载附件 ``wecom-agent-windows-x64.zip``，解压后在设置中指定 ``wecom-agent.exe``，或放到与 TaskTick.exe 同目录。`n`n**应用内更新**：Release 保持 draft 时客户端读不到 ``latest.json``；人工确认后请 Publish，更新通道才会生效。`n"
           $body = ($m.Value.Trim() + $extra).Trim() + "`n"
           [System.IO.File]::WriteAllText((Join-Path $PWD "release-notes.md"), $body)
 

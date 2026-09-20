@@ -19,8 +19,8 @@ tools/wecom-agent/            # .NET（net10.0-windows）控制台
   WecomAgent.csproj
   Program.cs                  # JSON Lines stdin/stdout
   WecomAutomation.cs          # FlaUI 定位/发送
-scripts/stage-wecom-agent.ps1 # 自包含单文件 → src-tauri/binaries/
-src-tauri/binaries/           # Tauri externalBin（构建产物，不入库）
+scripts/stage-wecom-agent.ps1 # 自包含单文件 → src-tauri/binaries/（CI 打 zip 用）
+src-tauri/binaries/           # stage 产物（不入库；不打入安装包）
 src-tauri/src/wecom_agent.rs  # Rust 拉起与协议客户端
 ```
 
@@ -108,14 +108,16 @@ cd D:\Moon\tools\TaskTick\tools\wecom-agent
 # 产物：bin\Release\net10.0-windows\wecom-agent.exe
 ```
 
-打入安装包（**自包含单文件**，目标机无需另装 .NET）：
+发版附件（**自包含单文件**，目标机无需另装 .NET；**不**打入安装包）：
 
 ```powershell
-# 仓库根目录
+# 仓库根目录（CI release/build 会跑）
 npm run agent:stage
 # 产物：src-tauri/binaries/wecom-agent-x86_64-pc-windows-msvc.exe
-# npm run tauri:build 会先执行 agent:stage，再由 Tauri externalBin 打进安装目录
+# → 压缩为 wecom-agent-windows-x64.zip 挂到 GitHub Release
 ```
+
+用户侧：设置 → 企微 →「下载 Agent zip」→ 解压 →「浏览…」选 `wecom-agent.exe`，或放到与 `TaskTick.exe` 同目录。
 
 ## 时序 · TaskTick 如何找到 Agent
 
@@ -123,8 +125,8 @@ npm run agent:stage
 
 1. 设置 `wecomAgent.path`（绝对路径）
 2. 环境变量 `AUTO_TASK_WECOM_AGENT`
-3. 与 `TaskTick.exe` **同目录**的 `wecom-agent.exe`（正式安装包 / NSIS）
-4. 本地已 stage：`src-tauri/binaries/wecom-agent-x86_64-pc-windows-msvc.exe`
+3. 与 `TaskTick.exe` **同目录**的 `wecom-agent.exe`（用户自行放置）
+4. 本地已 stage：`src-tauri/binaries/wecom-agent-x86_64-pc-windows-msvc.exe`（开发）
 5. 仓库开发构建：`tools/wecom-agent/bin/Release/net10.0-windows/wecom-agent.exe`（兼容 `net8.0-windows`）
 
 设置 `wecomAgent.enabled=true` 且能 `ping` 成功时：

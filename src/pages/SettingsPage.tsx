@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   exportTasks,
   getSettings,
@@ -14,6 +15,10 @@ import {
   wecomAgentPing,
   writeTextFile,
 } from "../api/tasks";
+
+/** 正式 Release 附件；draft 阶段链接可能 404，需 Publish 后可用 */
+const WECOM_AGENT_ZIP_URL =
+  "https://github.com/moon-stack-OAo/TaskTick/releases/latest/download/wecom-agent-windows-x64.zip";
 import {
   appVersion,
   checkForUpdate,
@@ -785,9 +790,9 @@ export function SettingsPage({
               <div>
                 <p className="setting-title">启用 FlaUI Agent</p>
                 <p className="setting-desc">
-                  优先调用 wecom-agent.exe；失败时可回退键鼠。
+                  优先调用 wecom-agent.exe；失败时可回退键鼠。安装包不内置 Agent，需单独下载 zip。
                   {settings?.wecomAgentResolvedPath
-                    ? ` 当前：${settings.wecomAgentResolvedPath}`
+                    ? ` 当前解析：${settings.wecomAgentResolvedPath}`
                     : " 尚未解析到 Agent 可执行文件。"}
                 </p>
               </div>
@@ -819,6 +824,147 @@ export function SettingsPage({
                   })()
                 }
               />
+            </div>
+            <div
+              className="setting-row"
+              style={{ flexDirection: "column", alignItems: "stretch", gap: 8, paddingLeft: 0 }}
+            >
+              <div>
+                <p className="setting-title">Agent 路径</p>
+                <p className="setting-desc">
+                  下载 wecom-agent-windows-x64.zip → 解压得到 wecom-agent.exe →
+                  在此选择，或放到与 TaskTick.exe 同目录后留空自动查找。
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <input
+                  className="input mono"
+                  style={{ flex: 1, minWidth: 200 }}
+                  type="text"
+                  aria-label="wecom-agent.exe 路径"
+                  placeholder="留空则自动查找同目录 / 环境变量"
+                  disabled={!settings || busyKey === "wecomAgentPath"}
+                  value={settings?.wecomAgent?.path ?? ""}
+                  onChange={(e) => {
+                    if (!settings) return;
+                    setSettings({
+                      ...settings,
+                      wecomAgent: { ...settings.wecomAgent, path: e.target.value },
+                    });
+                  }}
+                  onBlur={() => {
+                    void (async () => {
+                      if (!settings) return;
+                      setBusyKey("wecomAgentPath");
+                      try {
+                        const next = await updateSettings({
+                          wecomAgent: { path: settings.wecomAgent?.path ?? "" },
+                        });
+                        setSettings(next);
+                      } catch (e) {
+                        onToast(e instanceof Error ? e.message : String(e));
+                      } finally {
+                        setBusyKey(null);
+                      }
+                    })();
+                  }}
+                />
+                <button
+                  className="btn btn-secondary btn-sm"
+                  type="button"
+                  disabled={!settings || !!busyKey}
+                  onClick={() =>
+                    void (async () => {
+                      if (!settings) return;
+                      setBusyKey("wecomAgentPath");
+                      try {
+                        const selected = await open({
+                          title: "选择 wecom-agent.exe",
+                          multiple: false,
+                          filters: [{ name: "Executable", extensions: ["exe"] }],
+                        });
+                        if (!selected || Array.isArray(selected)) return;
+                        const next = await updateSettings({
+                          wecomAgent: { path: selected },
+                        });
+                        setSettings(next);
+                        onToast("已保存 Agent 路径");
+                      } catch (e) {
+                        onToast(e instanceof Error ? e.message : String(e));
+                      } finally {
+                        setBusyKey(null);
+                      }
+                    })()
+                  }
+                >
+                  浏览…
+                </button>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  type="button"
+                  disabled={!settings || !!busyKey || !(settings.wecomAgent?.path ?? "").trim()}
+                  onClick={() =>
+                    void (async () => {
+                      if (!settings) return;
+                      setBusyKey("wecomAgentPath");
+                      try {
+                        const next = await updateSettings({ wecomAgent: { path: "" } });
+                        setSettings(next);
+                        onToast("已清空路径（将自动查找）");
+                      } catch (e) {
+                        onToast(e instanceof Error ? e.message : String(e));
+                      } finally {
+                        setBusyKey(null);
+                      }
+                    })()
+                  }
+                >
+                  清空
+                </button>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  type="button"
+                  disabled={busyKey === "agentZip"}
+                  onClick={() =>
+                    void (async () => {
+                      setBusyKey("agentZip");
+                      try {
+                        await openUrl(WECOM_AGENT_ZIP_URL);
+                        onToast("已打开下载页（需已 Publish 的 Release）");
+                      } catch (e) {
+                        onToast(e instanceof Error ? e.message : String(e));
+                      } finally {
+                        setBusyKey(null);
+                      }
+                    })()
+                  }
+                >
+                  下载 Agent zip
+                </button>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  type="button"
+                  disabled={busyKey === "agentPing"}
+                  onClick={() =>
+                    void (async () => {
+                      setBusyKey("agentPing");
+                      try {
+                        const r = await wecomAgentPing();
+                        onToast(r.note);
+                        await loadSettings();
+                      } catch (e) {
+                        onToast(e instanceof Error ? e.message : String(e));
+                      } finally {
+                        setBusyKey(null);
+                      }
+                    })()
+                  }
+                >
+                  {busyKey === "agentPing" ? "探测中…" : "检测 Agent"}
+                </button>
+              </div>
             </div>
             <div className="setting-row" style={{ paddingLeft: 0 }}>
               <div>
@@ -852,33 +998,6 @@ export function SettingsPage({
                 }
               />
             </div>
-            <div className="setting-row" style={{ paddingLeft: 0 }}>
-              <div>
-                <p className="setting-title">探测 Agent</p>
-                <p className="setting-desc">确认 Agent 可执行文件能够正常启动并响应。</p>
-              </div>
-              <button
-                className="btn btn-secondary btn-sm"
-                type="button"
-                disabled={busyKey === "agentPing"}
-                onClick={() =>
-                  void (async () => {
-                    setBusyKey("agentPing");
-                    try {
-                      const r = await wecomAgentPing();
-                      onToast(r.note);
-                      await loadSettings();
-                    } catch (e) {
-                      onToast(e instanceof Error ? e.message : String(e));
-                    } finally {
-                      setBusyKey(null);
-                    }
-                  })()
-                }
-              >
-                {busyKey === "agentPing" ? "探测中…" : "检测 Agent"}
-              </button>
-            </div>
             <div className="notice">
               <svg className="notice-icon" viewBox="0 0 18 18" fill="none" aria-hidden="true">
                 <circle cx="9" cy="9" r="7.2" stroke="currentColor" strokeWidth="1.4" />
@@ -891,7 +1010,8 @@ export function SettingsPage({
               </svg>
               <div>
                 <strong>风险提示</strong>
-                ：依赖企业微信窗口结构与前台焦点。改版后需更新适配。请勿在无人值守锁屏场景依赖本动作。
+                ：依赖企业微信窗口结构与前台焦点。改版后需更新适配。请勿在无人值守锁屏场景依赖本动作。自包含
+                Agent 约 50MB，目标机无需另装 .NET。
               </div>
             </div>
           </div>

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       include_agent:
-        description: 是否一并构建并打包 wecom-agent
+        description: 是否一并构建并打包 wecom-agent zip（安装包本身不内置 Agent）
         type: boolean
         default: true
 
@@ -38,6 +38,7 @@ jobs:
           workspaces: src-tauri -> target
 
       - name: Setup .NET
+        if: ${{ inputs.include_agent }}
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
@@ -45,17 +46,15 @@ jobs:
       - name: Install npm deps
         run: npm ci
 
-      # externalBin 已配置，Tauri 打包前必须 stage；可选再附一份独立 zip
-      - name: Stage wecom-agent (self-contained sidecar)
+      - name: Package wecom-agent zip
+        if: ${{ inputs.include_agent }}
         shell: pwsh
         run: |
           npm run agent:stage
           $staged = "src-tauri/binaries/wecom-agent-x86_64-pc-windows-msvc.exe"
           if (-not (Test-Path $staged)) { throw "sidecar missing: $staged" }
-          if ("${{ inputs.include_agent }}" -eq "true") {
-            New-Item -ItemType Directory -Force -Path "dist-agent" | Out-Null
-            Copy-Item $staged "dist-agent/wecom-agent.exe" -Force
-          }
+          New-Item -ItemType Directory -Force -Path "dist-agent" | Out-Null
+          Copy-Item $staged "dist-agent/wecom-agent.exe" -Force
 
       - name: Tauri build
         env:
@@ -66,7 +65,6 @@ jobs:
             Write-Error "缺少 Secret TAURI_SIGNING_PRIVATE_KEY。createUpdaterArtifacts 已开启，预览构建也需要签名私钥。"
             exit 1
           }
-          # agent:stage 已在上一步完成；此处直接 tauri build，避免重复 publish
           npx tauri build
         shell: pwsh
 

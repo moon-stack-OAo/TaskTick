@@ -56,6 +56,3 @@ jobs:
         run: |
           dotnet restore
           dotnet build -c Release --no-restore
-
-      - name: Stage wecom-agent sidecar
-        run: npm run agent:stage

@@ -18,7 +18,7 @@
 
 产物：`bin\Release\net10.0-windows\wecom-agent.exe`（开发调试，依赖本机 .NET）
 
-打入 TaskTick 安装包请在仓库根目录执行：
+发版 zip（不打入安装包）在仓库根目录：
 
 ```powershell
 npm run agent:stage

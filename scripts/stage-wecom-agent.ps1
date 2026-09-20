@@ -1,4 +1,4 @@
-# Stage self-contained wecom-agent.exe into src-tauri/binaries/ for Tauri externalBin.
+# Stage self-contained wecom-agent.exe into src-tauri/binaries/ (CI zips for Release addon).
 # Usage (repo root):
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/stage-wecom-agent.ps1
 # Keep this file ASCII-only so Windows PowerShell 5.1 (CI default via npm) can parse it.

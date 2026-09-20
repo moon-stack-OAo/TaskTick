@@ -61,9 +61,9 @@ npm run clear              # 别名：npm run clean
 # 企微 Agent（可选）
 npm run agent:restore
 npm run agent:build          # 开发用 framework-dependent
-npm run agent:stage          # 自包含单文件 → src-tauri/binaries/（打安装包必跑）
+npm run agent:stage          # 自包含单文件 → src-tauri/binaries/（CI 打 zip 用）
 
-# 本地打包（需 Updater 私钥环境变量；.env 无效；内含 agent:stage）
+# 本地打包（需 Updater 私钥环境变量；.env 无效；安装包不含 Agent）
 npm run tauri:build
 ```
 
@@ -143,7 +143,7 @@ npm run tauri:build
 - Agent 非静默后台，常仍需激活窗口；失败可回退键鼠方案。
 - 关闭企微窗口通常进托盘，不会强制杀进程。
 - Agent 路径：设置 `wecomAgent.path` → 环境变量 `AUTO_TASK_WECOM_AGENT` → 与 `TaskTick.exe` 同目录 → `src-tauri/binaries/`（stage 产物）→ 仓库 `tools/wecom-agent/bin/...`。协议见 `docs/wecom-agent.md`。
-- 正式安装包通过 `bundle.externalBin` 随附自包含 `wecom-agent.exe`；打包前须 `npm run agent:stage`。
+- 正式安装包**不**内置 Agent；Release 附件 `wecom-agent-windows-x64.zip`，设置页可下载并选路径。
 - 勿在日志、PR、changelog、示例中粘贴签名私钥或密码。
 
 ## 设计稿（OpenDesign）

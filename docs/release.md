@@ -34,11 +34,12 @@ cargo test --manifest-path src-tauri/Cargo.toml
 npx tsc --noEmit
 ```
 
-企微 Agent（打安装包前必跑；`npm run tauri:build` 已包含）：
+企微 Agent（可选；发版流水线会打 zip，**不**打入安装包）：
 
 ```bash
 npm run agent:stage
 # → src-tauri/binaries/wecom-agent-x86_64-pc-windows-msvc.exe
+# CI 再压缩为 wecom-agent-windows-x64.zip
 ```
 
 ## Windows 产物路径
@@ -71,7 +72,7 @@ NSIS（`-setup.exe`）已配置 `SimpChinese` + `English`，并开启语言选�
 
 1. **权限**：当前为用户级桌面应用；若企业环境拦截未签名安装包，需自行代码签名（见 Tauri 文档 [Windows 签名](https://v2.tauri.app/distribute/sign/windows/)）。这与 **Updater 更新签名**（minisign）是两套机制。
 2. **WebView2**：目标机器需已安装 Microsoft Edge WebView2 Runtime（Win10/11 通常已有）。
-3. **企微 Agent**：安装目录与 `TaskTick.exe` 同目录会带上自包含 `wecom-agent.exe`（`bundle.externalBin`）；目标机**不必**另装 .NET。设置中启用 Agent 后「检测」应能 ping 通。
+3. **企微 Agent（可选）**：安装包**不含** `wecom-agent.exe`。从 Release 下载 `wecom-agent-windows-x64.zip`（自包含，无需 .NET），解压后在设置中指定路径，或放到与 `TaskTick.exe` 同目录。未配置时可用键鼠回退。
 4. **杀软 / SmartScreen**：未代码签名时首次运行可能提示；属预期。
 5. **托盘常驻**：安装后从开始菜单启动；关闭主窗口默认进托盘（可用设置关闭该行为）。真正退出请用托盘菜单「退出」。
 6. **单实例**：重复打开安装的快捷方式会激活已有窗口，不会起第二进程。
@@ -101,13 +102,14 @@ npm ci
 npx tsc --noEmit
 cargo check --manifest-path src-tauri/Cargo.toml
 cargo test --manifest-path src-tauri/Cargo.toml
-npm run agent:stage
+dotnet build -c Release --project tools/wecom-agent
 ```
 
-本地正式打包（需 Updater 私钥环境变量）：
+本地正式打包（需 Updater 私钥环境变量；安装包不含 Agent）：
 
 ```powershell
-npm run tauri:build   # 内含 agent:stage + tauri build
+npm run tauri:build
+# 可选：npm run agent:stage 后自行打 zip
 ```
 
 ## 应用内自动更新（Updater）
