@@ -9,15 +9,16 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
+    "tauri:build": "npm run agent:stage && tauri build",
     "typecheck": "tsc --noEmit",
     "check:rust": "cargo check --manifest-path src-tauri/Cargo.toml",
     "test": "cargo test --manifest-path src-tauri/Cargo.toml",
     "check": "npm run typecheck && npm run check:rust && npm run test",
-    "clear": "rimraf dist dist-ssr dist-agent preview-artifacts release-notes.md src-tauri/target src-tauri/gen/schemas",
+    "clear": "rimraf dist dist-ssr dist-agent preview-artifacts release-notes.md src-tauri/target src-tauri/gen/schemas src-tauri/binaries/wecom-agent-*.exe",
     "clean": "npm run clear",
     "agent:restore": "dotnet restore --project tools/wecom-agent",
-    "agent:build": "dotnet build -c Release --project tools/wecom-agent"
+    "agent:build": "dotnet build -c Release --project tools/wecom-agent",
+    "agent:stage": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stage-wecom-agent.ps1"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

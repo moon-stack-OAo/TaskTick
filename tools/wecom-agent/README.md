@@ -16,7 +16,14 @@
 & "C:\Program Files\dotnet\dotnet.exe" build -c Release
 ```
 
-产物：`bin\Release\net10.0-windows\wecom-agent.exe`
+产物：`bin\Release\net10.0-windows\wecom-agent.exe`（开发调试，依赖本机 .NET）
+
+打入 TaskTick 安装包请在仓库根目录执行：
+
+```powershell
+npm run agent:stage
+# → src-tauri/binaries/wecom-agent-x86_64-pc-windows-msvc.exe（自包含，目标机无需 .NET）
+```
 
 ## 手工试跑
 

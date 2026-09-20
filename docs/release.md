@@ -34,12 +34,11 @@ cargo test --manifest-path src-tauri/Cargo.toml
 npx tsc --noEmit
 ```
 
-企微 Agent（可选）：
+企微 Agent（打安装包前必跑；`npm run tauri:build` 已包含）：
 
 ```bash
-cd tools/wecom-agent
-dotnet restore
-dotnet build -c Release
+npm run agent:stage
+# → src-tauri/binaries/wecom-agent-x86_64-pc-windows-msvc.exe
 ```
 
 ## Windows 产物路径
@@ -72,11 +71,12 @@ NSIS（`-setup.exe`）已配置 `SimpChinese` + `English`，并开启语言选�
 
 1. **权限**：当前为用户级桌面应用；若企业环境拦截未签名安装包，需自行代码签名（见 Tauri 文档 [Windows 签名](https://v2.tauri.app/distribute/sign/windows/)）。这与 **Updater 更新签名**（minisign）是两套机制。
 2. **WebView2**：目标机器需已安装 Microsoft Edge WebView2 Runtime（Win10/11 通常已有）。
-3. **杀软 / SmartScreen**：未代码签名时首次运行可能提示；属预期。
-4. **托盘常驻**：安装后从开始菜单启动；关闭主窗口默认进托盘（可用设置关闭该行为）。真正退出请用托盘菜单「退出」。
-5. **单实例**：重复打开安装的快捷方式会激活已有窗口，不会起第二进程。
-6. **开机自启**：由设置页开关控制，写入系统启动项（`tauri-plugin-autostart`）。
-7. **应用内更新**：安装前会设置退出标志，避免关窗进托盘导致安装器卡住。
+3. **企微 Agent**：安装目录与 `TaskTick.exe` 同目录会带上自包含 `wecom-agent.exe`（`bundle.externalBin`）；目标机**不必**另装 .NET。设置中启用 Agent 后「检测」应能 ping 通。
+4. **杀软 / SmartScreen**：未代码签名时首次运行可能提示；属预期。
+5. **托盘常驻**：安装后从开始菜单启动；关闭主窗口默认进托盘（可用设置关闭该行为）。真正退出请用托盘菜单「退出」。
+6. **单实例**：重复打开安装的快捷方式会激活已有窗口，不会起第二进程。
+7. **开机自启**：由设置页开关控制，写入系统启动项（`tauri-plugin-autostart`）。
+8. **应用内更新**：安装前会设置退出标志，避免关窗进托盘导致安装器卡住。
 
 ## GitHub Actions
 
@@ -101,7 +101,13 @@ npm ci
 npx tsc --noEmit
 cargo check --manifest-path src-tauri/Cargo.toml
 cargo test --manifest-path src-tauri/Cargo.toml
-dotnet build -c Release --project tools/wecom-agent
+npm run agent:stage
+```
+
+本地正式打包（需 Updater 私钥环境变量）：
+
+```powershell
+npm run tauri:build   # 内含 agent:stage + tauri build
 ```
 
 ## 应用内自动更新（Updater）

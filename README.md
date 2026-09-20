@@ -43,13 +43,12 @@ npm run tauri build
 ### 企微 FlaUI Agent（可选）
 
 ```bash
-cd tools/wecom-agent
-dotnet restore
-dotnet build -c Release
+npm run agent:stage
 ```
 
-产物：`tools/wecom-agent/bin/Release/net10.0-windows/wecom-agent.exe`  
-在设置中启用 Agent 并配置路径（或环境变量 `AUTO_TASK_WECOM_AGENT`）。协议见 [`docs/wecom-agent.md`](./docs/wecom-agent.md)。
+产物：`src-tauri/binaries/wecom-agent-x86_64-pc-windows-msvc.exe`（自包含）。  
+`npm run tauri:build` 会先 stage，再经 `externalBin` 打进安装目录（与 `TaskTick.exe` 同目录）。  
+开发调试也可用 `npm run agent:build`（framework-dependent）。协议见 [`docs/wecom-agent.md`](./docs/wecom-agent.md)。
 
 ## CI / 发版
 

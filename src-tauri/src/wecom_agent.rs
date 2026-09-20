@@ -68,8 +68,28 @@ pub fn resolve_agent_path(settings: &WecomAgentSettings) -> Option<PathBuf> {
         }
     }
 
-    // 相对仓库开发路径
-    let rel = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    // 与当前 exe 同目录（安装包 / externalBin 分发）
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let p = dir.join("wecom-agent.exe");
+            if p.is_file() {
+                return Some(p);
+            }
+        }
+    }
+
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    // 本地已 stage 的自包含 sidecar（npm run agent:stage）
+    let staged = manifest
+        .join("binaries")
+        .join("wecom-agent-x86_64-pc-windows-msvc.exe");
+    if staged.is_file() {
+        return Some(staged);
+    }
+
+    // 相对仓库开发路径（framework-dependent 构建）
+    let rel = manifest
         .join("..")
         .join("tools")
         .join("wecom-agent")
@@ -81,7 +101,7 @@ pub fn resolve_agent_path(settings: &WecomAgentSettings) -> Option<PathBuf> {
         return Some(rel);
     }
     // 兼容旧构建目录
-    let rel8 = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let rel8 = manifest
         .join("..")
         .join("tools")
         .join("wecom-agent")
@@ -93,24 +113,11 @@ pub fn resolve_agent_path(settings: &WecomAgentSettings) -> Option<PathBuf> {
         return Some(rel8);
     }
 
-    // 与当前 exe 同目录（打包分发）
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            let p = dir.join("wecom-agent.exe");
-            if p.is_file() {
-                return Some(p);
-            }
-        }
-    }
-
     None
 }
 
 pub fn ping(settings: &WecomAgentSettings) -> Result<AgentOutcome, String> {
-    let path = resolve_agent_path(settings).ok_or_else(|| {
-        "未找到 wecom-agent.exe。请先用 .NET 8 构建 tools/wecom-agent，或在设置中填写路径。"
-            .to_string()
-    })?;
+    let path = resolve_agent_path(settings).ok_or_else(|| missing_agent_msg())?;
     invoke_agent(
         &path,
         &AgentRequest {
@@ -176,7 +183,7 @@ pub fn send(
 }
 
 fn missing_agent_msg() -> String {
-    "未找到 wecom-agent.exe。构建：cd tools/wecom-agent && dotnet build -c Release；或设置 wecomAgent.path / 环境变量 AUTO_TASK_WECOM_AGENT。"
+    "未找到 wecom-agent.exe。正式安装包应已随 TaskTick.exe 同目录分发；开发环境请执行 npm run agent:stage，或设置 wecomAgent.path / 环境变量 AUTO_TASK_WECOM_AGENT。"
         .into()
 }
 

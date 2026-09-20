@@ -15,10 +15,12 @@ Tauri/Rust 侧不适合深度 UI Automation；用独立 **C# + FlaUI** 进程：
 ## 目录
 
 ```text
-tools/wecom-agent/          # .NET 8 控制台
+tools/wecom-agent/            # .NET（net10.0-windows）控制台
   WecomAgent.csproj
-  Program.cs                # JSON Lines stdin/stdout
-  WecomAutomation.cs        # FlaUI 定位/发送
+  Program.cs                  # JSON Lines stdin/stdout
+  WecomAutomation.cs          # FlaUI 定位/发送
+scripts/stage-wecom-agent.ps1 # 自包含单文件 → src-tauri/binaries/
+src-tauri/binaries/           # Tauri externalBin（构建产物，不入库）
 src-tauri/src/wecom_agent.rs  # Rust 拉起与协议客户端
 ```
 
@@ -106,10 +108,13 @@ cd D:\Moon\tools\TaskTick\tools\wecom-agent
 # 产物：bin\Release\net10.0-windows\wecom-agent.exe
 ```
 
-也可发布单文件：
+打入安装包（**自包含单文件**，目标机无需另装 .NET）：
 
 ```powershell
-& "C:\Program Files\dotnet\dotnet.exe" publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
+# 仓库根目录
+npm run agent:stage
+# 产物：src-tauri/binaries/wecom-agent-x86_64-pc-windows-msvc.exe
+# npm run tauri:build 会先执行 agent:stage，再由 Tauri externalBin 打进安装目录
 ```
 
 ## 时序 · TaskTick 如何找到 Agent
@@ -118,13 +123,14 @@ cd D:\Moon\tools\TaskTick\tools\wecom-agent
 
 1. 设置 `wecomAgent.path`（绝对路径）
 2. 环境变量 `AUTO_TASK_WECOM_AGENT`
-3. 相对仓库：`tools/wecom-agent/bin/Release/net8.0-windows/wecom-agent.exe`
-4. 与 `TaskTick.exe` 同目录的 `wecom-agent.exe`（打包分发时）
+3. 与 `TaskTick.exe` **同目录**的 `wecom-agent.exe`（正式安装包 / NSIS）
+4. 本地已 stage：`src-tauri/binaries/wecom-agent-x86_64-pc-windows-msvc.exe`
+5. 仓库开发构建：`tools/wecom-agent/bin/Release/net10.0-windows/wecom-agent.exe`（兼容 `net8.0-windows`）
 
 设置 `wecomAgent.enabled=true` 且能 `ping` 成功时：
 
 - `probe` / `send` **优先走 Agent**
-- Agent 失败再 **fallback** 到内置键鼠（可关）
+- Agent 失败再 **fallback** 到内置键鼠（可关；默认开，因此「检测 Agent」失败时手动执行仍可能成功）
 
 ## 与空闲队列的关系
 
@@ -134,4 +140,3 @@ cd D:\Moon\tools\TaskTick\tools\wecom-agent
 
 1. 用 FlaUI Inspect / Accessibility Insights 抓企微控件树，固化 AutomationId/Name
 2. 常驻 Agent + 命名管道（比反复启进程更快）
-3. 打包时把 `wecom-agent.exe` 打进 NSIS 旁路目录
