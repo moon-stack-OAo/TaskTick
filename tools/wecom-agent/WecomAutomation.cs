@@ -81,27 +81,27 @@ public static class WecomAutomation
 
                     using var automation = new UIA3Automation();
                     var win = EnsureWindow(automation, req.LaunchWecom, req.TimeoutSec, steps);
-                    win.SetForeground();
-                    win.Focus();
-                    Thread.Sleep(180);
-                    steps.Add(Ok("窗口前置", $"Name={win.Name}"));
-
-                    Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_F);
-                    Thread.Sleep(300);
-                    steps.Add(Ok("打开搜索", "Ctrl+F"));
+                    // 不抢前台、不发全局键：搜索/输入走 ValuePattern，确认/发送只投递到企微窗口。
+                    steps.Add(Ok("定位窗口", $"Name={win.Name}（未激活前台）"));
 
                     var search = FindEditByHint(win, "搜索") ?? FirstEdit(win);
                     if (search == null)
+                    {
+                        PostKeyToWindow(win, VirtualKeyShort.KEY_F, ctrl: true);
+                        Thread.Sleep(300);
+                        search = FindEditByHint(win, "搜索") ?? FirstEdit(win);
+                        steps.Add(Ok("打开搜索", "向企微窗口投递 Ctrl+F（非全局键盘）"));
+                    }
+                    if (search == null)
                         throw new InvalidOperationException("未找到搜索输入框。请用 Accessibility Insights 校准。");
 
-                    search.Focus();
-                    PasteText(contact);
+                    SetElementText(search, contact);
                     Thread.Sleep(350);
-                    steps.Add(Ok("输入联系人", contact));
+                    steps.Add(Ok("输入联系人", $"{contact}（控件写入）"));
 
-                    Keyboard.Type(VirtualKeyShort.ENTER);
+                    PostKeyToWindow(win, VirtualKeyShort.ENTER, ctrl: false);
                     Thread.Sleep(450);
-                    steps.Add(Ok("打开私聊", "Enter 选中首个结果"));
+                    steps.Add(Ok("打开私聊", "向企微窗口投递 Enter"));
 
                     var input = FindEditByHint(win, "输入")
                         ?? FindDocument(win)
@@ -109,15 +109,13 @@ public static class WecomAutomation
                     if (input == null)
                         throw new InvalidOperationException("未找到消息输入框。请校准控件树。");
 
-                    input.Focus();
-                    Thread.Sleep(80);
-                    PasteText(message);
+                    SetElementText(input, message);
                     Thread.Sleep(120);
-                    steps.Add(Ok("输入消息", $"{message.Length} 字"));
+                    steps.Add(Ok("输入消息", $"{message.Length} 字（控件写入）"));
 
-                    Keyboard.Type(VirtualKeyShort.ENTER);
+                    PostKeyToWindow(win, VirtualKeyShort.ENTER, ctrl: false);
                     Thread.Sleep(200);
-                    steps.Add(Ok("发送", "Enter"));
+                    steps.Add(Ok("发送", "向企微窗口投递 Enter"));
 
                     if (req.CloseAfterSend)
                     {
@@ -336,13 +334,64 @@ public static class WecomAutomation
         return best;
     }
 
-    private static void PasteText(string text)
+    /// <summary>
+    /// 优先 ValuePattern 直接写控件，不占用全局键盘、不改剪贴板。
+    /// 企微部分输入框是只读 Value，失败再退回窗口级 Ctrl+A/V（仍不走全局键盘）。
+    /// </summary>
+    private static void SetElementText(AutomationElement element, string text)
     {
+        var value = element.Patterns.Value.PatternOrDefault;
+        if (value != null && !value.IsReadOnly)
+        {
+            value.SetValue(text);
+            return;
+        }
+
+        var hwnd = element.Properties.NativeWindowHandle.ValueOrDefault;
+        if (hwnd == IntPtr.Zero)
+            hwnd = element.Properties.NativeWindowHandle.Value;
+        if (hwnd == IntPtr.Zero)
+            throw new InvalidOperationException("控件不支持写入且没有窗口句柄");
+
         SetClipboardText(text);
-        Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_A);
+        PostKey(hwnd, VirtualKeyShort.KEY_A, ctrl: true);
         Thread.Sleep(20);
-        Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_V);
+        PostKey(hwnd, VirtualKeyShort.KEY_V, ctrl: true);
     }
+
+    /// <summary>
+    /// 只把按键投递到指定窗口，不影响用户正在打字的其他窗口。
+    /// </summary>
+    private static void PostKeyToWindow(Window win, VirtualKeyShort key, bool ctrl)
+    {
+        var hwnd = win.Properties.NativeWindowHandle.ValueOrDefault;
+        if (hwnd == IntPtr.Zero)
+            throw new InvalidOperationException("企微窗口没有句柄，无法投递按键");
+        PostKey(hwnd, key, ctrl);
+    }
+
+    private static void PostKey(IntPtr hwnd, VirtualKeyShort key, bool ctrl)
+    {
+        const uint WM_KEYDOWN = 0x0100;
+        const uint WM_KEYUP = 0x0101;
+        var vk = (uint)key;
+        if (ctrl)
+        {
+            PostMessage(hwnd, WM_KEYDOWN, (IntPtr)VK_CONTROL, IntPtr.Zero);
+            PostMessage(hwnd, WM_KEYDOWN, (IntPtr)vk, IntPtr.Zero);
+            PostMessage(hwnd, WM_KEYUP, (IntPtr)vk, IntPtr.Zero);
+            PostMessage(hwnd, WM_KEYUP, (IntPtr)VK_CONTROL, IntPtr.Zero);
+            return;
+        }
+
+        PostMessage(hwnd, WM_KEYDOWN, (IntPtr)vk, IntPtr.Zero);
+        PostMessage(hwnd, WM_KEYUP, (IntPtr)vk, IntPtr.Zero);
+    }
+
+    private const uint VK_CONTROL = 0x11;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
     private static void SetClipboardText(string text)
     {
