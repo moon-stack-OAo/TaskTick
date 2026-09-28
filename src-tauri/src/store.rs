@@ -532,9 +532,13 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<usize, String> {
     Ok(copied)
 }
 
+fn strip_utf8_bom(raw: &str) -> &str {
+    raw.strip_prefix('\u{feff}').unwrap_or(raw)
+}
+
 fn read_store(path: &Path) -> Result<AppStore, String> {
     let raw = fs::read_to_string(path).map_err(|e| format!("读取存储失败: {e}"))?;
-    serde_json::from_str(&raw).map_err(|e| format!("解析存储失败: {e}"))
+    serde_json::from_str(strip_utf8_bom(&raw)).map_err(|e| format!("解析存储失败: {e}"))
 }
 
 fn write_store(path: &Path, store: &AppStore) -> Result<(), String> {
@@ -662,6 +666,21 @@ mod tests {
             unit: "分钟".into(),
         };
         assert!(validate_task(&t).unwrap_err().contains("间隔"));
+    }
+
+    #[test]
+    fn read_store_tolerates_utf8_bom() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(STORE_FILE_NAME);
+        let store = AppStore {
+            tasks: vec![make_task("bom", "BOM任务")],
+            ..AppStore::default()
+        };
+        let body = serde_json::to_string(&store).unwrap();
+        fs::write(&path, format!("\u{feff}{body}")).unwrap();
+        let loaded = read_store(&path).unwrap();
+        assert_eq!(loaded.tasks.len(), 1);
+        assert_eq!(loaded.tasks[0].name, "BOM任务");
     }
 
     #[test]

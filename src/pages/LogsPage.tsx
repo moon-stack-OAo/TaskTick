@@ -156,6 +156,7 @@ export function LogsPage({ logs, tasks, query, busy, onToast }: LogsPageProps) {
           <div className="field" style={{ margin: 0 }}>
             <label htmlFor="log-from">开始时间</label>
             <input
+              autoComplete="off"
               id="log-from"
               className="input"
               type="text"
@@ -167,6 +168,7 @@ export function LogsPage({ logs, tasks, query, busy, onToast }: LogsPageProps) {
           <div className="field" style={{ margin: 0 }}>
             <label htmlFor="log-to">结束时间</label>
             <input
+              autoComplete="off"
               id="log-to"
               className="input"
               type="text"

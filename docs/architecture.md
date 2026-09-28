@@ -107,7 +107,7 @@ Scheduler + Action Registry + Tray + Notify
 
 ## FlaUI Agent
 
-可选 C# 进程 `tools/wecom-agent`（FlaUI.UIA3）。设置 `wecomAgent.enabled=true` 后，`probe`/`send` 优先走 Agent，失败可回退键鼠。Agent 发送不发全局键（控件写入 + 窗口级按键投递）。协议与构建见 `docs/wecom-agent.md`。
+可选 C# 进程 `tools/wecom-agent`（FlaUI.UIA3）。设置 `wecomAgent.enabled=true` 后，`probe`/`send` 优先走 Agent，失败可回退键鼠。Agent 发送依赖前台，流程对齐键鼠回退：`Ctrl+F` → 粘贴联系人 → Enter → 点击底部输入区 → 粘贴消息 → Enter。后台窗口会明确失败。协议与构建见 `docs/wecom-agent.md`。
 
 ## wecom_ui_dm 实现要点
 

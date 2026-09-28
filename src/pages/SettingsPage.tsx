@@ -838,6 +838,7 @@ export function SettingsPage({
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <input
+                  autoComplete="off"
                   className="input mono"
                   style={{ flex: 1, minWidth: 200 }}
                   type="text"
@@ -1040,6 +1041,7 @@ export function SettingsPage({
               </p>
             </div>
             <input
+              autoComplete="off"
               className="input mono"
               style={{ width: 88, textAlign: "right" }}
               type="number"
@@ -1071,6 +1073,7 @@ export function SettingsPage({
               </p>
             </div>
             <input
+              autoComplete="off"
               className="input mono"
               style={{ width: 88, textAlign: "right" }}
               type="number"

@@ -80,15 +80,7 @@ pub fn resolve_agent_path(settings: &WecomAgentSettings) -> Option<PathBuf> {
 
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
-    // 本地已 stage 的自包含产物（npm run agent:stage，开发用）
-    let staged = manifest
-        .join("binaries")
-        .join("wecom-agent-x86_64-pc-windows-msvc.exe");
-    if staged.is_file() {
-        return Some(staged);
-    }
-
-    // 相对仓库开发路径（framework-dependent 构建）
+    // 开发构建优先于 stage：stage 是发版快照，本地改 Agent 后不会自动更新。
     let rel = manifest
         .join("..")
         .join("tools")
@@ -111,6 +103,14 @@ pub fn resolve_agent_path(settings: &WecomAgentSettings) -> Option<PathBuf> {
         .join("wecom-agent.exe");
     if rel8.is_file() {
         return Some(rel8);
+    }
+
+    // 本地已 stage 的自包含产物（npm run agent:stage，开发用）
+    let staged = manifest
+        .join("binaries")
+        .join("wecom-agent-x86_64-pc-windows-msvc.exe");
+    if staged.is_file() {
+        return Some(staged);
     }
 
     None

@@ -148,6 +148,7 @@ export function TaskEditor({ task, busy, onCancel, onSave, onToast }: TaskEditor
             <div className="field">
               <label htmlFor="task-name">任务名称</label>
               <input
+                autoComplete="off"
                 id="task-name"
                 className="input"
                 value={draft.name}
@@ -173,6 +174,7 @@ export function TaskEditor({ task, busy, onCancel, onSave, onToast }: TaskEditor
 
               {draft.trigger.type === "once" ? (
                 <input
+                  autoComplete="off"
                   className="input"
                   type="datetime-local"
                   value={draft.trigger.datetime}
@@ -183,6 +185,7 @@ export function TaskEditor({ task, busy, onCancel, onSave, onToast }: TaskEditor
               {draft.trigger.type === "daily" ? (
                 <div className="row-2">
                   <input
+                    autoComplete="off"
                     className="input"
                     type="time"
                     value={draft.trigger.time || "09:00"}
@@ -197,6 +200,7 @@ export function TaskEditor({ task, busy, onCancel, onSave, onToast }: TaskEditor
               {draft.trigger.type === "cron" ? (
                 <>
                   <input
+                    autoComplete="off"
                     className="input mono"
                     value={draft.trigger.expr}
                     placeholder="30 18 * * 1-5"
@@ -234,6 +238,7 @@ export function TaskEditor({ task, busy, onCancel, onSave, onToast }: TaskEditor
                     ))}
                   </div>
                   <input
+                    autoComplete="off"
                     className="input"
                     style={{ marginTop: 8 }}
                     value={draft.trigger.note}
@@ -246,6 +251,7 @@ export function TaskEditor({ task, busy, onCancel, onSave, onToast }: TaskEditor
               {draft.trigger.type === "interval" ? (
                 <div className="row-2">
                   <input
+                    autoComplete="off"
                     className="input"
                     type="number"
                     min={1}
@@ -345,6 +351,7 @@ export function TaskEditor({ task, busy, onCancel, onSave, onToast }: TaskEditor
 
                     {action.type === "open_url" ? (
                       <input
+                        autoComplete="off"
                         className="input mono"
                         placeholder="https://news.example.com"
                         value={action.url}
@@ -355,12 +362,14 @@ export function TaskEditor({ task, busy, onCancel, onSave, onToast }: TaskEditor
                     {action.type === "open_app" ? (
                       <>
                         <input
+                          autoComplete="off"
                           className="input mono"
                           placeholder="C:/Program Files/.../app.exe"
                           value={action.path}
                           onChange={(e) => updateAction(idx, { path: e.target.value })}
                         />
                         <input
+                          autoComplete="off"
                           className="input mono"
                           placeholder="启动参数（可选）"
                           value={action.args}
@@ -404,6 +413,7 @@ export function TaskEditor({ task, busy, onCancel, onSave, onToast }: TaskEditor
                                 超时秒数（0=不限时）
                               </label>
                               <input
+                                autoComplete="off"
                                 className="input mono"
                                 type="number"
                                 min={0}
@@ -438,6 +448,7 @@ export function TaskEditor({ task, busy, onCancel, onSave, onToast }: TaskEditor
                             <option value="python">Python (.py)</option>
                           </select>
                           <input
+                            autoComplete="off"
                             className="input mono"
                             placeholder="D:/scripts/backup.ps1"
                             value={action.path}
@@ -445,6 +456,7 @@ export function TaskEditor({ task, busy, onCancel, onSave, onToast }: TaskEditor
                           />
                         </div>
                         <input
+                          autoComplete="off"
                           className="input mono"
                           placeholder="工作目录（可选，默认脚本所在目录）"
                           value={action.workingDir}
@@ -462,6 +474,7 @@ export function TaskEditor({ task, busy, onCancel, onSave, onToast }: TaskEditor
                             超时秒数（0=不限时，默认 60）
                           </label>
                           <input
+                            autoComplete="off"
                             className="input mono"
                             type="number"
                             min={0}
@@ -508,6 +521,7 @@ export function TaskEditor({ task, busy, onCancel, onSave, onToast }: TaskEditor
                               填写与企业微信通讯录完全一致的显示名，避免重名歧义。
                             </p>
                             <input
+                              autoComplete="off"
                               className="input"
                               placeholder="例如：张三"
                               value={action.contact}
@@ -520,6 +534,7 @@ export function TaskEditor({ task, busy, onCancel, onSave, onToast }: TaskEditor
                             </div>
                             <p className="step-hint">将写入私聊输入框并发送。请避免敏感或批量骚扰内容。</p>
                             <textarea
+                              autoComplete="off"
                               className="textarea"
                               placeholder="输入要发送的私聊消息"
                               value={action.message}
@@ -559,6 +574,7 @@ export function TaskEditor({ task, busy, onCancel, onSave, onToast }: TaskEditor
                               <span className="step-num">4</span>超时秒数
                             </div>
                             <input
+                              autoComplete="off"
                               className="input mono"
                               type="number"
                               min={5}
@@ -608,6 +624,7 @@ export function TaskEditor({ task, busy, onCancel, onSave, onToast }: TaskEditor
                                 失败重试次数
                               </label>
                               <input
+                                autoComplete="off"
                                 className="input mono"
                                 type="number"
                                 min={0}

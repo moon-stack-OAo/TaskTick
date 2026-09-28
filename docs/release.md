@@ -102,7 +102,7 @@ npm ci
 npx tsc --noEmit
 cargo check --manifest-path src-tauri/Cargo.toml
 cargo test --manifest-path src-tauri/Cargo.toml
-dotnet build -c Release --project tools/wecom-agent
+dotnet build -c Release tools/wecom-agent/WecomAgent.csproj
 ```
 
 本地正式打包（需 Updater 私钥环境变量；安装包不含 Agent）：

@@ -41,8 +41,8 @@ pub struct WecomAgentSettings {
     /// wecom-agent.exe 绝对路径；空则按文档自动查找。
     #[serde(default)]
     pub path: String,
-    /// Agent 失败时是否回退内置键鼠方案。
-    #[serde(default = "default_true")]
+    /// Agent 失败时是否回退内置键鼠方案。默认关：键鼠会抢全局键盘。
+    #[serde(default)]
     pub fallback_to_input: bool,
 }
 
@@ -51,7 +51,7 @@ impl Default for WecomAgentSettings {
         Self {
             enabled: false,
             path: String::new(),
-            fallback_to_input: true,
+            fallback_to_input: false,
         }
     }
 }
@@ -184,7 +184,7 @@ mod tests {
         assert_eq!(s.wecom_idle_send.idle_seconds, 30);
         assert_eq!(s.wecom_idle_send.countdown_seconds, 5);
         assert!(!s.wecom_agent.enabled);
-        assert!(s.wecom_agent.fallback_to_input);
+        assert!(!s.wecom_agent.fallback_to_input);
     }
 
     #[test]

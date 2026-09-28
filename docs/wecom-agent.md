@@ -8,7 +8,7 @@ Tauri/Rust 侧不适合深度 UI Automation；用独立 **C# + FlaUI** 进程：
 - 与调度器解耦，可单独升级 Agent
 - 失败时仍可回退到现有键鼠方案（`wecom.rs`）
 
-**现实限制**：FlaUI 仍通常需要企微窗口存在。`send` 默认不激活前台、不发全局键：搜索框/消息框优先 `ValuePattern` 写入；确认与发送只 `PostMessage` 到企微窗口。控件不支持写入时，才向该窗口投递 `Ctrl+A/V`（仍不走全局键盘）。不保证完全后台静默。
+**现实限制**：FlaUI 仍通常需要企微窗口存在，且 **`send` 必须把企微置于前台**。发送流程与键鼠回退对齐：`Ctrl+F` → 剪贴板粘贴联系人 → `Enter` 打开首个结果 → 点击窗口下部输入区 → 粘贴消息 → `Enter` 发送。后台/托盘/锁屏会明确失败。执行期间请勿切换焦点；重名联系人可能选错首个结果。
 
 **锁屏与修饰键**：执行前用 `OpenInputDesktop` 检测锁屏，已锁屏则跳过注入（不抢前台）；快捷键序列结束时强制抬起 Ctrl/Shift/Alt，避免粘键。
 
@@ -126,13 +126,13 @@ npm run agent:stage
 1. 设置 `wecomAgent.path`（绝对路径）
 2. 环境变量 `AUTO_TASK_WECOM_AGENT`
 3. 与 `TaskTick.exe` **同目录**的 `wecom-agent.exe`（用户自行放置）
-4. 本地已 stage：`src-tauri/binaries/wecom-agent-x86_64-pc-windows-msvc.exe`（开发）
-5. 仓库开发构建：`tools/wecom-agent/bin/Release/net10.0-windows/wecom-agent.exe`（兼容 `net8.0-windows`）
+4. 仓库开发构建：`tools/wecom-agent/bin/Release/net10.0-windows/wecom-agent.exe`（兼容 `net8.0-windows`）
+5. 本地已 stage：`src-tauri/binaries/wecom-agent-x86_64-pc-windows-msvc.exe`（发版快照，落后于开发构建）
 
 设置 `wecomAgent.enabled=true` 且能 `ping` 成功时：
 
 - `probe` / `send` **优先走 Agent**
-- Agent 失败再 **fallback** 到内置键鼠（可关；默认开，因此「检测 Agent」失败时手动执行仍可能成功）
+- Agent 失败再 **fallback** 到内置键鼠（默认关，避免抢全局键盘；设置里可手动打开）
 
 ## 与空闲队列的关系
 

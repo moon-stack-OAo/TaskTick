@@ -1,18 +1,18 @@
 using System.Diagnostics;
+using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
 using FlaUI.Core.Input;
-using FlaUI.Core.Patterns;
 using FlaUI.Core.WindowsAPI;
 using FlaUI.UIA3;
 
 namespace WecomAgent;
 
 /// <summary>
-/// 企微 FlaUI 最小实现：定位主窗口 + 搜索/输入。
-/// 控件树随版本变化，需用 Accessibility Insights 校准。
+/// 企微 FlaUI 发送：前台 + 真实键鼠（与 wecom.rs 一致）。
+/// 流程：Ctrl+F → 粘贴联系人 → Enter → 点击底部输入区 → 粘贴消息 → Enter。
 /// </summary>
 public static class WecomAutomation
 {
@@ -22,6 +22,11 @@ public static class WecomAutomation
         @"C:\Program Files\WXWork\WXWork.exe",
         @"D:\Program Files (x86)\WXWork\WXWork.exe",
         @"D:\Program Files\WXWork\WXWork.exe",
+    };
+
+    private static readonly string[] MessageHints =
+    {
+        "输入", "说点什么", "请输入", "发送消息",
     };
 
     public static AgentResponse Probe(AgentRequest req)
@@ -37,9 +42,8 @@ public static class WecomAutomation
             }
             using var automation = new UIA3Automation();
             var win = EnsureWindow(automation, req.LaunchWecom, req.TimeoutSec, steps);
-            win.Focus();
-            steps.Add(Ok("窗口前置", $"Name={win.Name}"));
-            return OkResp(req.Id, "FlaUI 预检：已定位企微主窗口", steps);
+            EnsureForeground(win, steps);
+            return OkResp(req.Id, "FlaUI 预检：已定位并前置企微主窗口", steps);
         }
         catch (Exception ex)
         {
@@ -81,41 +85,48 @@ public static class WecomAutomation
 
                     using var automation = new UIA3Automation();
                     var win = EnsureWindow(automation, req.LaunchWecom, req.TimeoutSec, steps);
-                    // 不抢前台、不发全局键：搜索/输入走 ValuePattern，确认/发送只投递到企微窗口。
-                    steps.Add(Ok("定位窗口", $"Name={win.Name}（未激活前台）"));
+                    var hwnd = RequireHwnd(win);
+                    EnsureForeground(win, hwnd, steps);
 
-                    var search = FindEditByHint(win, "搜索") ?? FirstEdit(win);
-                    if (search == null)
-                    {
-                        PostKeyToWindow(win, VirtualKeyShort.KEY_F, ctrl: true);
-                        Thread.Sleep(300);
-                        search = FindEditByHint(win, "搜索") ?? FirstEdit(win);
-                        steps.Add(Ok("打开搜索", "向企微窗口投递 Ctrl+F（非全局键盘）"));
-                    }
-                    if (search == null)
-                        throw new InvalidOperationException("未找到搜索输入框。请用 Accessibility Insights 校准。");
+                    // 1) Ctrl+F 打开搜索（与键鼠回退一致，不依赖 UIA 碰巧找到搜索框）
+                    Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_F);
+                    Thread.Sleep(300);
+                    steps.Add(Ok("打开搜索", "Ctrl+F（真实键盘）"));
 
-                    SetElementText(search, contact);
-                    Thread.Sleep(350);
-                    steps.Add(Ok("输入联系人", $"{contact}（控件写入）"));
+                    // 2) 粘贴联系人
+                    EnsureStillForeground(hwnd);
+                    PasteText(contact);
+                    Thread.Sleep(380);
+                    steps.Add(Ok("粘贴联系人", $"已粘贴「{contact}」"));
 
-                    PostKeyToWindow(win, VirtualKeyShort.ENTER, ctrl: false);
-                    Thread.Sleep(450);
-                    steps.Add(Ok("打开私聊", "向企微窗口投递 Enter"));
+                    // 3) Enter 打开首个搜索结果
+                    EnsureStillForeground(hwnd);
+                    Keyboard.Type(VirtualKeyShort.ENTER);
+                    Thread.Sleep(480);
+                    steps.Add(Ok("打开私聊", "Enter 选中首个结果（重名可能选错）"));
 
-                    var input = FindEditByHint(win, "输入")
-                        ?? FindDocument(win)
-                        ?? BottomMostEdit(win);
-                    if (input == null)
-                        throw new InvalidOperationException("未找到消息输入框。请校准控件树。");
+                    // 4) 点击主窗口下部输入区（比纯 UIA Focus 更稳）
+                    EnsureStillForeground(hwnd);
+                    ClickMessageInputArea(hwnd);
+                    Thread.Sleep(140);
+                    steps.Add(Ok("聚焦输入框", "已点击主窗口下部输入区域"));
 
-                    SetElementText(input, message);
-                    Thread.Sleep(120);
-                    steps.Add(Ok("输入消息", $"{message.Length} 字（控件写入）"));
+                    // 可选：再点一次 UIA 找到的消息框，提高命中率
+                    var input = FindMessageInput(win);
+                    if (input != null)
+                        TryClickElement(input);
 
-                    PostKeyToWindow(win, VirtualKeyShort.ENTER, ctrl: false);
+                    // 5) 粘贴消息
+                    EnsureStillForeground(hwnd);
+                    PasteText(message);
+                    Thread.Sleep(140);
+                    steps.Add(Ok("粘贴消息", $"已粘贴 {message.Length} 字"));
+
+                    // 6) Enter 发送
+                    EnsureStillForeground(hwnd);
+                    Keyboard.Type(VirtualKeyShort.ENTER);
                     Thread.Sleep(200);
-                    steps.Add(Ok("发送", "向企微窗口投递 Enter"));
+                    steps.Add(Ok("发送", "Enter（请人工确认会话是否出现该消息）"));
 
                     if (req.CloseAfterSend)
                     {
@@ -146,7 +157,6 @@ public static class WecomAutomation
                 {
                     last = ex;
                     steps.Add(Fail($"尝试{i}", ex.Message));
-                    // 单次失败也抬起修饰键，避免粘键影响后续重试
                     ForceReleaseModifiers();
                     Thread.Sleep(350);
                 }
@@ -156,31 +166,20 @@ public static class WecomAutomation
         }
         finally
         {
-            // Send 流程（含 catch/重试）结束时强制抬起 Ctrl/Shift/Alt
             ForceReleaseModifiers();
         }
     }
 
-    /// <summary>
-    /// 强制抬起修饰键，避免锁屏/中断导致 Ctrl 等 KEYUP 丢失后「粘键」。
-    /// </summary>
     private static void ForceReleaseModifiers()
     {
-        // 优先 Win32 KEYUP（不依赖 FlaUI 枚举是否齐全）
         try
         {
             const byte KEYEVENTF_KEYUP = 0x02;
             foreach (byte vk in new byte[]
                      {
-                         0x11, // VK_CONTROL
-                         0xA2, // VK_LCONTROL
-                         0xA3, // VK_RCONTROL
-                         0x10, // VK_SHIFT
-                         0xA0, // VK_LSHIFT
-                         0xA1, // VK_RSHIFT
-                         0x12, // VK_MENU (Alt)
-                         0xA4, // VK_LMENU
-                         0xA5, // VK_RMENU
+                         0x11, 0xA2, 0xA3,
+                         0x10, 0xA0, 0xA1,
+                         0x12, 0xA4, 0xA5,
                      })
             {
                 keybd_event(vk, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
@@ -196,14 +195,11 @@ public static class WecomAutomation
             }
             catch
             {
-                // 忽略复位失败
+                // ignore
             }
         }
     }
 
-    /// <summary>
-    /// OpenInputDesktop 失败则视为会话已锁屏。
-    /// </summary>
     private static bool IsSessionLocked()
     {
         const uint DESKTOP_READOBJECTS = 0x0001;
@@ -223,6 +219,51 @@ public static class WecomAutomation
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool CloseDesktop(IntPtr hDesktop);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll")]
+    private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
+    [DllImport("user32.dll")]
+    private static extern bool BringWindowToTop(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    private static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetCursorPos(int x, int y);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left, Top, Right, Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X, Y;
+    }
 
     private static Window EnsureWindow(
         UIA3Automation automation,
@@ -299,14 +340,20 @@ public static class WecomAutomation
         return null;
     }
 
-    private static AutomationElement? FindDocument(Window win)
+    private static AutomationElement? FindMessageInput(Window win)
     {
-        return win.FindFirstDescendant(cf => cf.ByControlType(ControlType.Document));
-    }
+        foreach (var hint in MessageHints)
+        {
+            var byHint = FindEditByHint(win, hint);
+            if (byHint != null)
+                return byHint;
+        }
 
-    private static AutomationElement? FirstEdit(Window win)
-    {
-        return win.FindFirstDescendant(cf => cf.ByControlType(ControlType.Edit));
+        var doc = win.FindFirstDescendant(cf => cf.ByControlType(ControlType.Document));
+        if (doc != null)
+            return doc;
+
+        return BottomMostEdit(win);
     }
 
     private static AutomationElement? BottomMostEdit(Window win)
@@ -320,6 +367,9 @@ public static class WecomAutomation
             {
                 var r = e.BoundingRectangle;
                 if (r.IsEmpty) continue;
+                var name = e.Name ?? "";
+                if (name.Contains("搜索", StringComparison.OrdinalIgnoreCase))
+                    continue;
                 if (r.Top > bestY)
                 {
                     bestY = r.Top;
@@ -334,95 +384,186 @@ public static class WecomAutomation
         return best;
     }
 
-    /// <summary>
-    /// 优先 ValuePattern 直接写控件，不占用全局键盘、不改剪贴板。
-    /// 企微部分输入框是只读 Value，失败再退回窗口级 Ctrl+A/V（仍不走全局键盘）。
-    /// </summary>
-    private static void SetElementText(AutomationElement element, string text)
-    {
-        var value = element.Patterns.Value.PatternOrDefault;
-        if (value != null && !value.IsReadOnly)
-        {
-            value.SetValue(text);
-            return;
-        }
-
-        var hwnd = element.Properties.NativeWindowHandle.ValueOrDefault;
-        if (hwnd == IntPtr.Zero)
-            hwnd = element.Properties.NativeWindowHandle.Value;
-        if (hwnd == IntPtr.Zero)
-            throw new InvalidOperationException("控件不支持写入且没有窗口句柄");
-
-        SetClipboardText(text);
-        PostKey(hwnd, VirtualKeyShort.KEY_A, ctrl: true);
-        Thread.Sleep(20);
-        PostKey(hwnd, VirtualKeyShort.KEY_V, ctrl: true);
-    }
-
-    /// <summary>
-    /// 只把按键投递到指定窗口，不影响用户正在打字的其他窗口。
-    /// </summary>
-    private static void PostKeyToWindow(Window win, VirtualKeyShort key, bool ctrl)
+    private static IntPtr RequireHwnd(Window win)
     {
         var hwnd = win.Properties.NativeWindowHandle.ValueOrDefault;
         if (hwnd == IntPtr.Zero)
-            throw new InvalidOperationException("企微窗口没有句柄，无法投递按键");
-        PostKey(hwnd, key, ctrl);
+        {
+            try { hwnd = win.Properties.NativeWindowHandle.Value; }
+            catch { hwnd = IntPtr.Zero; }
+        }
+        if (hwnd == IntPtr.Zero)
+            throw new InvalidOperationException("企微窗口没有句柄，无法前置/点击");
+        return hwnd;
     }
 
-    private static void PostKey(IntPtr hwnd, VirtualKeyShort key, bool ctrl)
+    private static void EnsureForeground(Window win, List<AgentStep> steps)
     {
-        const uint WM_KEYDOWN = 0x0100;
-        const uint WM_KEYUP = 0x0101;
-        var vk = (uint)key;
-        if (ctrl)
+        EnsureForeground(win, RequireHwnd(win), steps);
+    }
+
+    private static void EnsureForeground(Window win, IntPtr hwnd, List<AgentStep> steps)
+    {
+        ShowWindow(hwnd, 9); // SW_RESTORE
+        ForceSetForeground(hwnd);
+        try { win.Focus(); } catch { /* ignore */ }
+
+        var deadline = DateTime.UtcNow.AddMilliseconds(1000);
+        while (DateTime.UtcNow < deadline)
         {
-            PostMessage(hwnd, WM_KEYDOWN, (IntPtr)VK_CONTROL, IntPtr.Zero);
-            PostMessage(hwnd, WM_KEYDOWN, (IntPtr)vk, IntPtr.Zero);
-            PostMessage(hwnd, WM_KEYUP, (IntPtr)vk, IntPtr.Zero);
-            PostMessage(hwnd, WM_KEYUP, (IntPtr)VK_CONTROL, IntPtr.Zero);
-            return;
+            if (GetForegroundWindow() == hwnd)
+            {
+                steps.Add(Ok("窗口前置", "已激活企微前台（后续键鼠依赖前台）"));
+                Thread.Sleep(120);
+                return;
+            }
+            ForceSetForeground(hwnd);
+            Thread.Sleep(40);
         }
 
-        PostMessage(hwnd, WM_KEYDOWN, (IntPtr)vk, IntPtr.Zero);
-        PostMessage(hwnd, WM_KEYUP, (IntPtr)vk, IntPtr.Zero);
+        throw new InvalidOperationException(
+            "企微未能置于前台，无法可靠输入（后台窗口不支持）。请先打开企微主窗口，勿锁屏/最小化到托盘后重试。");
     }
 
-    private const uint VK_CONTROL = 0x11;
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-
-    private static void SetClipboardText(string text)
+    private static void ForceSetForeground(IntPtr hwnd)
     {
-        if (!OpenClipboard(IntPtr.Zero))
-            throw new InvalidOperationException("OpenClipboard 失败");
+        var fg = GetForegroundWindow();
+        var curTid = GetCurrentThreadId();
+        var fgTid = GetWindowThreadProcessId(fg, out _);
+        var targetTid = GetWindowThreadProcessId(hwnd, out _);
+
         try
         {
-            EmptyClipboard();
-            var bytes = Encoding.Unicode.GetBytes(text + "\0");
-            var hGlobal = Marshal.AllocHGlobal(bytes.Length);
-            try
-            {
-                Marshal.Copy(bytes, 0, hGlobal, bytes.Length);
-                if (SetClipboardData(13 /* CF_UNICODETEXT */, hGlobal) == IntPtr.Zero)
-                {
-                    Marshal.FreeHGlobal(hGlobal);
-                    throw new InvalidOperationException("SetClipboardData 失败");
-                }
-                // 系统接管内存，勿 Free
-                hGlobal = IntPtr.Zero;
-            }
-            finally
-            {
-                if (hGlobal != IntPtr.Zero)
-                    Marshal.FreeHGlobal(hGlobal);
-            }
+            // 与 wecom.rs 一致：AttachThreadInput(前台线程, 当前线程)
+            if (fgTid != 0 && fgTid != curTid)
+                AttachThreadInput(fgTid, curTid, true);
+            if (targetTid != 0 && targetTid != curTid)
+                AttachThreadInput(targetTid, curTid, true);
+
+            BringWindowToTop(hwnd);
+            SetForegroundWindow(hwnd);
         }
         finally
         {
-            CloseClipboard();
+            if (fgTid != 0 && fgTid != curTid)
+                AttachThreadInput(fgTid, curTid, false);
+            if (targetTid != 0 && targetTid != curTid)
+                AttachThreadInput(targetTid, curTid, false);
         }
+    }
+
+    private static void EnsureStillForeground(IntPtr hwnd)
+    {
+        if (GetForegroundWindow() == hwnd) return;
+        ForceSetForeground(hwnd);
+        Thread.Sleep(50);
+        if (GetForegroundWindow() != hwnd)
+        {
+            throw new InvalidOperationException(
+                "企微失去前台焦点，写入中断。请保持企微在前台，勿切换到其他窗口。");
+        }
+    }
+
+    /// <summary>
+    /// 点击主窗口客户区偏下位置（水平约 62%，垂直约 92%），对齐 wecom.rs。
+    /// </summary>
+    private static void ClickMessageInputArea(IntPtr hwnd)
+    {
+        if (!GetClientRect(hwnd, out var rect))
+            throw new InvalidOperationException("GetClientRect 失败");
+
+        var width = rect.Right - rect.Left;
+        var height = rect.Bottom - rect.Top;
+        if (width <= 0 || height <= 0)
+            throw new InvalidOperationException("企微窗口客户区无效");
+
+        var pt = new POINT
+        {
+            X = rect.Left + width * 62 / 100,
+            Y = rect.Top + height * 92 / 100,
+        };
+        if (!ClientToScreen(hwnd, ref pt))
+            throw new InvalidOperationException("ClientToScreen 失败");
+
+        SetCursorPos(pt.X, pt.Y);
+        Thread.Sleep(40);
+        Mouse.Click(new Point(pt.X, pt.Y));
+        Thread.Sleep(60);
+    }
+
+    private static void TryClickElement(AutomationElement element)
+    {
+        try
+        {
+            var r = element.BoundingRectangle;
+            if (r.IsEmpty || r.Width < 2 || r.Height < 2) return;
+            // 排除顶部搜索框，避免又点回去
+            var name = element.Name ?? "";
+            if (name.Contains("搜索", StringComparison.OrdinalIgnoreCase))
+                return;
+            Mouse.Click(new Point((int)(r.Left + r.Width / 2), (int)(r.Top + r.Height / 2)));
+            Thread.Sleep(50);
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private static void PasteText(string text)
+    {
+        SetClipboardText(text);
+        Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_A);
+        Thread.Sleep(30);
+        Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_V);
+        Thread.Sleep(40);
+        ForceReleaseModifiers();
+    }
+
+    private static void SetClipboardText(string text)
+    {
+        Exception? last = null;
+        for (var i = 0; i < 3; i++)
+        {
+            try
+            {
+                if (!OpenClipboard(IntPtr.Zero))
+                    throw new InvalidOperationException($"OpenClipboard 失败（err={Marshal.GetLastWin32Error()}）");
+                try
+                {
+                    EmptyClipboard();
+                    var bytes = Encoding.Unicode.GetBytes(text + "\0");
+                    var hGlobal = Marshal.AllocHGlobal(bytes.Length);
+                    try
+                    {
+                        Marshal.Copy(bytes, 0, hGlobal, bytes.Length);
+                        if (SetClipboardData(13 /* CF_UNICODETEXT */, hGlobal) == IntPtr.Zero)
+                        {
+                            Marshal.FreeHGlobal(hGlobal);
+                            throw new InvalidOperationException($"SetClipboardData 失败（err={Marshal.GetLastWin32Error()}）");
+                        }
+                        hGlobal = IntPtr.Zero;
+                    }
+                    finally
+                    {
+                        if (hGlobal != IntPtr.Zero)
+                            Marshal.FreeHGlobal(hGlobal);
+                    }
+                }
+                finally
+                {
+                    CloseClipboard();
+                }
+                return;
+            }
+            catch (Exception ex)
+            {
+                last = ex;
+                Thread.Sleep(50);
+            }
+        }
+        throw new InvalidOperationException(
+            $"写入剪贴板失败：{last?.Message}。请关闭占用剪贴板的工具后重试。");
     }
 
     [DllImport("user32.dll", SetLastError = true)]

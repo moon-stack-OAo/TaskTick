@@ -74,6 +74,7 @@ export function TopBar({
             <div className="search-wrap">
               {Icon.search}
               <input
+                autoComplete="off"
                 className="search"
                 placeholder="搜索任务名、触发器或动作"
                 value={taskQuery}
@@ -99,6 +100,7 @@ export function TopBar({
             <div className="search-wrap">
               {Icon.search}
               <input
+                autoComplete="off"
                 className="search"
                 placeholder="搜索任务名或详情"
                 value={logQuery}
